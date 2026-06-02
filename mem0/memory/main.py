@@ -670,9 +670,16 @@ class Memory(MemoryBase):
         return {"results": vector_store_result}
 
     def _add_to_vector_store(self, messages, metadata, filters, infer, prompt=None):
+        # Step 0: 判断是否启用 infer。
+        # infer=False 表示不让 LLM 抽取 memory，而是把原始 messages 直接作为 memory 存进去。
         if not infer:
+            # Step 0.1: 用于收集最终返回的 memory 结果。
             returned_memories = []
+
+            # Step 0.2: 逐条处理输入 messages。
             for message_dict in messages:
+                # Step 0.3: 校验每条 message 的格式。
+                # 要求必须是 dict，并且至少包含 role 和 content。
                 if (
                     not isinstance(message_dict, dict)
                     or message_dict.get("role") is None
@@ -681,20 +688,35 @@ class Memory(MemoryBase):
                     logger.warning(f"Skipping invalid message format: {message_dict}")
                     continue
 
+                # Step 0.4: system 消息不作为 memory 存储，直接跳过。
                 if message_dict["role"] == "system":
                     continue
 
+                # Step 0.5: 为当前 message 复制一份 metadata，避免修改外部传入的 metadata。
                 per_msg_meta = deepcopy(metadata)
+
+                # Step 0.6: 把当前 message 的 role 写入 metadata。
+                # 例如 user / assistant。
                 per_msg_meta["role"] = message_dict["role"]
 
+                # Step 0.7: 如果 message 里有 name 字段，则将其作为 actor_id。
                 actor_name = message_dict.get("name")
                 if actor_name:
                     per_msg_meta["actor_id"] = actor_name
 
+                # Step 0.8: 取出原始 message 内容。
                 msg_content = message_dict["content"]
+
+                # Step 0.9: 对原始 message 内容做 embedding。
+                # 这里的 mode 是 "add"，表示用于新增 memory。
                 msg_embeddings = self.embedding_model.embed(msg_content, "add")
+
+                # Step 0.10: 调用 _create_memory() 创建 memory。
+                # _create_memory 内部会把文本、embedding、metadata 写入 vector store，
+                # 并写入 SQL history。
                 mem_id = self._create_memory(msg_content, {msg_content: msg_embeddings}, per_msg_meta)
 
+                # Step 0.11: 组装返回结果。
                 returned_memories.append(
                     {
                         "id": mem_id,
@@ -704,18 +726,38 @@ class Memory(MemoryBase):
                         "role": message_dict["role"],
                     }
                 )
+
+            # Step 0.12: infer=False 的路径到这里结束，直接返回原始 messages 对应的 memories。
             return returned_memories
 
         # === V3 PHASED BATCH PIPELINE ===
 
+        # Step 1: infer=True 时，进入 V3 分阶段批处理 pipeline。
+        # 这个路径会使用 LLM 从对话里抽取 memory，而不是直接存原文。
+
         # Phase 0: Context gathering
+        # Step 1.1: 根据 filters 构造 session_scope。
+        # session_scope 用于 SQL DB 中读取/保存该 user_id / agent_id / run_id 对应的最近消息。
         session_scope = _build_session_scope(filters)
+
+        # Step 1.2: 从 SQL DB 中取最近 10 条消息。
+        # 这些历史消息会作为 LLM 抽取 memory 时的上下文。
         last_messages = self.db.get_last_messages(session_scope, limit=10)
+
+        # Step 1.3: 把 messages 转成适合 prompt 使用的文本格式。
         parsed_messages = parse_messages(messages)
 
         # Phase 1: Existing memory retrieval
+        # Step 2.1: 从 filters 中提取 session 级别的过滤条件。
+        # 这里只保留 user_id / agent_id / run_id，保证只检索当前作用域下的旧 memory。
         search_filters = {k: v for k, v in filters.items() if k in ("user_id", "agent_id", "run_id") and v}
+
+        # Step 2.2: 对当前新消息 parsed_messages 做 embedding。
+        # 注意这里 mode 是 "search"，因为这是为了检索已有 memory。
         query_embedding = self.embedding_model.embed(parsed_messages, "search")
+
+        # Step 2.3: 在 vector store 中检索和当前新消息最相关的旧 memories。
+        # 这里是 add() 内部的轻量 retrieve，只做一次语义向量搜索，top_k 固定为 10。
         existing_results = self.vector_store.search(
             query=parsed_messages,
             vectors=query_embedding,
@@ -724,20 +766,41 @@ class Memory(MemoryBase):
         )
 
         # Map UUIDs to integers (anti-hallucination)
+        # Step 2.4: 把真实 UUID 映射成简单整数 id。
+        # 这样可以减少 LLM 在 prompt 中处理复杂 UUID 时产生幻觉的概率。
         existing_memories = []
         uuid_mapping = {}
+
+        # Step 2.5: 遍历检索到的旧 memories。
         for idx, mem in enumerate(existing_results):
+            # Step 2.6: 记录整数 id 到真实 memory id 的映射。
             uuid_mapping[str(idx)] = mem.id
+
+            # Step 2.7: 只把整数 id 和 memory 文本传给后续 prompt。
             existing_memories.append({"id": str(idx), "text": mem.payload.get("data", "")})
 
         # Phase 2: LLM extraction (single call)
+        # Step 3.1: 判断当前是否是纯 agent 作用域。
+        # 如果有 agent_id 且没有 user_id，则认为是 agent-scoped。
         is_agent_scoped = bool(filters.get("agent_id")) and not filters.get("user_id")
+
+        # Step 3.2: 设置系统提示词，默认使用 ADDITIVE_EXTRACTION_PROMPT。
         system_prompt = ADDITIVE_EXTRACTION_PROMPT
+
+        # Step 3.3: 如果是 agent-scoped，则追加 agent 上下文提示。
         if is_agent_scoped:
             system_prompt += AGENT_CONTEXT_SUFFIX
 
+        # Step 3.4: 如果调用时传入了 prompt，则优先使用 prompt；
+        # 否则使用实例配置里的 custom_instructions。
         custom_instr = prompt or self.custom_instructions
 
+        # Step 3.5: 构造给 LLM 的用户提示词。
+        # 里面包含：
+        # - existing_memories：相关旧 memories
+        # - new_messages：当前新输入
+        # - last_k_messages：最近消息上下文
+        # - custom_instructions：自定义抽取指令
         user_prompt = generate_additive_extraction_prompt(
             existing_memories=existing_memories,
             new_messages=parsed_messages,
@@ -745,6 +808,7 @@ class Memory(MemoryBase):
             custom_instructions=custom_instr,
         )
 
+        # Step 3.6: 调用 LLM 做单次 memory extraction。
         try:
             response = self.llm.generate_response(
                 messages=[
@@ -754,36 +818,52 @@ class Memory(MemoryBase):
                 response_format={"type": "json_object"},
             )
         except Exception as e:
+            # Step 3.7: 如果 LLM 调用失败，记录错误并返回空列表。
             logger.error(f"LLM extraction failed: {e}")
             return []
 
         # Parse response
+        # Step 4.1: 解析 LLM 返回结果。
         try:
+            # Step 4.2: 移除 LLM 返回中可能包裹的 markdown code block。
             response = remove_code_blocks(response)
+
+            # Step 4.3: 如果 response 为空，则认为没有抽取到 memory。
             if not response or not response.strip():
                 extracted_memories = []
             else:
                 try:
+                    # Step 4.4: 优先直接按 JSON 解析，并取出 memory 字段。
                     extracted_memories = json.loads(response, strict=False).get("memory", [])
                 except json.JSONDecodeError:
+                    # Step 4.5: 如果直接解析失败，则尝试从文本中提取 JSON 片段后再解析。
                     extracted_json = extract_json(response)
                     extracted_memories = json.loads(extracted_json, strict=False).get("memory", [])
         except Exception as e:
+            # Step 4.6: 如果解析过程出错，记录错误，并认为没有抽取到 memories。
             logger.error(f"Error parsing extraction response: {e}")
             extracted_memories = []
 
+        # Step 4.7: 如果 LLM 没有抽取出任何 memory，也要保存当前 messages 到 SQL DB。
+        # 这样后续 add() 仍然可以把它作为 rolling message window 的上下文。
         if not extracted_memories:
             # Save messages even if nothing extracted
             self.db.save_messages(messages, session_scope)
             return []
 
         # Phase 3: Batch embed all extracted memory texts
+        # Step 5.1: 从 LLM 抽取结果中取出所有 memory text。
         mem_texts = [m.get("text", "") for m in extracted_memories if m.get("text")]
+
+        # Step 5.2: 批量对 memory text 做 embedding。
         try:
             mem_embeddings_list = self.embedding_model.embed_batch(mem_texts, "add")
+
+            # Step 5.3: 建立 text -> embedding 的映射，方便后续构造 records。
             embed_map = dict(zip(mem_texts, mem_embeddings_list))
         except Exception:
             # Fallback: embed individually
+            # Step 5.4: 如果批量 embedding 失败，则降级为逐条 embedding。
             embed_map = {}
             for text in mem_texts:
                 try:
@@ -793,49 +873,78 @@ class Memory(MemoryBase):
 
         # Phase 4: Per-memory CPU processing + Phase 5: Hash dedup
         # Build set of existing hashes for dedup
+        # Step 6.1: 收集旧 memories 中已有的 hash，用于和新 memory 去重。
         existing_hashes = set()
         for mem in existing_results:
             h = mem.payload.get("hash") if hasattr(mem, "payload") and mem.payload else None
             if h:
                 existing_hashes.add(h)
 
+        # Step 6.2: records 用于暂存待写入 vector store 的新 memory。
+        # 每条 record 格式为：(memory_id, text, embedding, payload)
         records = []  # (memory_id, text, embedding, payload)
+
+        # Step 6.3: seen_hashes 用于当前 batch 内部去重。
         seen_hashes = set()  # dedup within the current batch
+
+        # Step 6.4: 遍历 LLM 抽取出来的每条 memory。
         for mem in extracted_memories:
+            # Step 6.5: 取出 memory text。
             text = mem.get("text")
+
+            # Step 6.6: 如果 text 为空，或者没有成功生成 embedding，则跳过。
             if not text or text not in embed_map:
                 continue
 
+            # Step 6.7: 对 memory text 计算 MD5 hash。
             mem_hash = hashlib.md5(text.encode()).hexdigest()
+
+            # Step 6.8: 如果 hash 已存在于旧 memory 或当前 batch，则认为重复，跳过。
             if mem_hash in existing_hashes or mem_hash in seen_hashes:
                 logger.debug(f"Skipping duplicate memory (hash match): {text[:50]}")
                 continue
+
+            # Step 6.9: 记录当前 hash，避免本批次重复写入。
             seen_hashes.add(mem_hash)
 
+            # Step 6.10: 对文本做 lemmatization，供后续 keyword/BM25 检索使用。
             text_lemmatized = lemmatize_for_bm25(text)
 
+            # Step 6.11: 为新 memory 生成唯一 ID。
             memory_id = str(uuid.uuid4())
+
+            # Step 6.12: 构造 memory metadata。
             mem_metadata = deepcopy(metadata)
             mem_metadata["data"] = text
             mem_metadata["text_lemmatized"] = text_lemmatized
             mem_metadata["hash"] = mem_hash
+
+            # Step 6.13: 如果外部 metadata 没有 created_at，则使用当前 UTC 时间。
             if "created_at" not in mem_metadata:
                 mem_metadata["created_at"] = datetime.now(timezone.utc).isoformat()
+
+            # Step 6.14: 新增 memory 时，updated_at 初始等于 created_at。
             mem_metadata["updated_at"] = mem_metadata["created_at"]
+
+            # Step 6.15: 如果 LLM 抽取结果包含 attributed_to，则写入 metadata。
             if mem.get("attributed_to"):
                 mem_metadata["attributed_to"] = mem["attributed_to"]
 
+            # Step 6.16: 把新 memory 加入待持久化 records。
             records.append((memory_id, text, embed_map[text], mem_metadata))
 
+        # Step 6.17: 如果去重后没有任何新 memory，也保存 messages，然后返回空列表。
         if not records:
             self.db.save_messages(messages, session_scope)
             return []
 
         # Phase 6: Batch persist
+        # Step 7.1: 从 records 中拆出 vectors、ids、payloads，准备批量写入 vector store。
         all_vectors = [r[2] for r in records]
         all_ids = [r[0] for r in records]
         all_payloads = [r[3] for r in records]
 
+        # Step 7.2: 批量写入 vector store。
         try:
             self.vector_store.insert(
                 vectors=all_vectors,
@@ -844,6 +953,7 @@ class Memory(MemoryBase):
             )
         except Exception:
             # Fallback: insert one by one
+            # Step 7.3: 如果批量写入失败，则降级为逐条写入。
             for mid, vec, pay in zip(all_ids, all_vectors, all_payloads):
                 try:
                     self.vector_store.insert(vectors=[vec], ids=[mid], payloads=[pay])
@@ -851,6 +961,8 @@ class Memory(MemoryBase):
                     logger.error(f"Failed to insert memory {mid}: {e}")
 
         # Batch history
+        # Step 7.4: 构造 SQL history 记录。
+        # 这里所有事件都是 ADD，因为这是 add-only extraction pipeline。
         history_records = [
             {
                 "memory_id": r[0],
@@ -862,10 +974,13 @@ class Memory(MemoryBase):
             }
             for r in records
         ]
+
+        # Step 7.5: 批量写入 SQL history。
         try:
             self.db.batch_add_history(history_records)
         except Exception:
             # Fallback: add one by one
+            # Step 7.6: 如果批量写入 history 失败，则降级为逐条写入。
             for hr in history_records:
                 try:
                     self.db.add_history(hr["memory_id"], None, hr["new_memory"], "ADD", created_at=hr.get("created_at"))
@@ -873,30 +988,52 @@ class Memory(MemoryBase):
                     logger.error(f"Failed to add history for {hr['memory_id']}: {e}")
 
         # Phase 7: Batch entity linking
+        # Step 8.1: 开始批量实体链接。
+        # 这一步不是写 memory 本体，而是维护 entity -> memory_ids 的辅助索引。
         try:
+            # Step 8.2: 取出本批次所有新 memory 文本。
             all_texts = [r[1] for r in records]
+
+            # Step 8.3: 批量抽取实体。
             all_entities = extract_entities_batch(all_texts)
 
             # 7a: Global dedup — collect unique entities across all memories
+            # Step 8.4: 对本批次所有实体做全局去重。
+            # key 是规范化后的 entity_text，value 包含 entity_type、entity_text、关联的 memory_ids。
             global_entities = {}  # normalized_key -> (entity_type, entity_text, set of memory_ids)
+
+            # Step 8.5: 遍历每条新 memory 及其对应的实体列表。
             for idx, (memory_id, text, embedding, payload) in enumerate(records):
                 entities = all_entities[idx] if idx < len(all_entities) else []
+
+                # Step 8.6: 遍历当前 memory 中抽取出的实体。
                 for entity_type, entity_text in entities:
+                    # Step 8.7: 用小写 + 去空格后的 entity_text 作为去重 key。
                     key = entity_text.strip().lower()
+
+                    # Step 8.8: 如果实体已经出现过，则把当前 memory_id 加入关联集合。
                     if key in global_entities:
                         global_entities[key][2].add(memory_id)
                     else:
+                        # Step 8.9: 如果实体首次出现，则创建一条实体记录。
                         global_entities[key] = [entity_type, entity_text, {memory_id}]
 
+            # Step 8.10: 如果本批次存在实体，则继续处理实体 embedding 和 entity store 写入。
             if global_entities:
+                # Step 8.11: 固定实体顺序，方便 embedding 和 key 对齐。
                 ordered_keys = list(global_entities.keys())
+
+                # Step 8.12: 取出实体文本列表。
                 entity_texts = [global_entities[k][1] for k in ordered_keys]
 
                 # 7b: Single batch embed for all unique entities
+                # Step 8.13: 对所有唯一实体批量做 embedding。
                 try:
                     entity_embeddings = self.embedding_model.embed_batch(entity_texts, "add")
                 except Exception:
                     # Fallback: embed individually, use None for failures
+                    # Step 8.14: 如果批量实体 embedding 失败，则降级为逐条 embedding。
+                    # 失败的实体用 None 占位。
                     entity_embeddings = []
                     for t in entity_texts:
                         try:
@@ -905,13 +1042,22 @@ class Memory(MemoryBase):
                             entity_embeddings.append(None)
 
                 # Filter out entities with failed embeddings
+                # Step 8.15: 过滤掉 embedding 失败的实体。
                 valid = [(i, k) for i, k in enumerate(ordered_keys) if entity_embeddings[i] is not None]
+
+                # Step 8.16: 如果存在有效实体，则继续查找 entity store 中是否已有类似实体。
                 if valid:
                     valid_indices, valid_keys = zip(*valid)
+
+                    # Step 8.17: 取出有效实体对应的向量。
                     valid_vectors = [entity_embeddings[i] for i in valid_indices]
 
                     # 7c: Batch search for existing entities
+                    # Step 8.18: 取出有效实体文本。
                     valid_texts = [global_entities[k][1] for k in valid_keys]
+
+                    # Step 8.19: 在 entity store 中批量搜索已有实体。
+                    # top_k=1 表示每个实体只找最相似的一个候选。
                     existing_matches = self.entity_store.search_batch(
                         queries=valid_texts,
                         vectors_list=valid_vectors,
@@ -920,18 +1066,26 @@ class Memory(MemoryBase):
                     )
 
                     # 7d: Separate into inserts vs updates
+                    # Step 8.20: 准备收集需要新插入的实体。
                     to_insert_vectors, to_insert_ids, to_insert_payloads = [], [], []
+
+                    # Step 8.21: 遍历所有有效实体，判断是更新已有实体，还是插入新实体。
                     for j, key in enumerate(valid_keys):
                         entity_type, entity_text, memory_ids = global_entities[key]
                         matches = existing_matches[j] if j < len(existing_matches) else []
 
+                        # Step 8.22: 如果找到高度相似的已有实体，则更新它的 linked_memory_ids。
                         if matches and matches[0].score >= 0.95:
                             # Update existing entity
                             match = matches[0]
                             payload = match.payload or {}
+
+                            # Step 8.23: 取出已有 linked_memory_ids，并合并当前 memory_ids。
                             linked = set(payload.get("linked_memory_ids", []))
                             linked |= memory_ids
                             payload["linked_memory_ids"] = sorted(linked)
+
+                            # Step 8.24: 更新 entity store 中已有实体的 payload。
                             try:
                                 self.entity_store.update(
                                     vector_id=match.id,
@@ -942,6 +1096,7 @@ class Memory(MemoryBase):
                                 logger.debug(f"Entity update failed for '{entity_text}': {e}")
                         else:
                             # New entity — collect for batch insert
+                            # Step 8.25: 如果没有匹配到已有实体，则准备插入新实体。
                             to_insert_vectors.append(valid_vectors[j])
                             to_insert_ids.append(str(uuid.uuid4()))
                             to_insert_payloads.append({
@@ -952,6 +1107,7 @@ class Memory(MemoryBase):
                             })
 
                     # 7e: Single batch insert for all new entities
+                    # Step 8.26: 如果存在新实体，则批量写入 entity store。
                     if to_insert_vectors:
                         try:
                             self.entity_store.insert(
@@ -962,22 +1118,30 @@ class Memory(MemoryBase):
                         except Exception as e:
                             logger.warning(f"Batch entity insert failed: {e}")
         except Exception as e:
+            # Step 8.27: entity linking 失败不影响主 memory 写入流程。
             logger.warning(f"Batch entity linking failed: {e}")
 
         # Phase 8: Save messages + return
+        # Step 9.1: 把当前 messages 保存到 SQL DB 的 rolling message window。
         self.db.save_messages(messages, session_scope)
 
+        # Step 9.2: 构造最终返回结果。
         returned_memories = [
             {"id": r[0], "memory": r[1], "event": "ADD"}
             for r in records
         ]
 
+        # Step 9.3: 处理 telemetry filters，用于埋点上报。
         keys, encoded_ids = process_telemetry_filters(filters)
+
+        # Step 9.4: 记录 mem0.add telemetry 事件。
         capture_event(
             "mem0.add",
             self,
             {"version": self.api_version, "keys": keys, "encoded_ids": encoded_ids, "sync_type": "sync"},
         )
+
+        # Step 9.5: 返回本次新增的 memories。
         return returned_memories
 
     def get(self, memory_id):
