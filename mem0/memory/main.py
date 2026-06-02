@@ -1,55 +1,45 @@
-# -*- coding: utf-8 -*-
-# 说明：本文件在原始代码基础上补充中文注释；原有注释和代码均已保留。
-# 说明：注释尽量按代码执行顺序逐行解释，纯括号、空行、简单参数行等无必要行未额外注释。
+# ==================== 中文逻辑注释版 ====================
+# 说明：原始代码和原有英文注释均已保留；新增的中文注释以“逻辑注释”标识。
+# 注释重点解释每段代码在整体记忆系统中的作用，而不是简单翻译语法。
+# =======================================================
 
-# 注释：导入 asyncio 模块，供后续代码使用。
+# 逻辑注释：导入异步、GC、哈希、JSON、日志、路径、UUID 等基础能力，后面分别用于异步封装、去重、解析、审计和唯一 ID。
 import asyncio
-# 注释：导入 gc 模块，供后续代码使用。
 import gc
-# 注释：导入 hashlib 模块，供后续代码使用。
 import hashlib
-# 注释：导入 json 模块，供后续代码使用。
 import json
-# 注释：导入 logging 模块，供后续代码使用。
 import logging
-# 注释：导入 os 模块，供后续代码使用。
 import os
-# 注释：导入 uuid 模块，供后续代码使用。
 import uuid
-# 注释：导入 warnings 模块，供后续代码使用。
 import warnings
-# 注释：从 copy 模块导入 deepcopy。
 from copy import deepcopy
-# 注释：从 datetime 模块导入 datetime, timezone。
 from datetime import datetime, timezone
-# 注释：从 typing 模块导入 Any, Dict, Optional。
 from typing import Any, Dict, Optional
 
-# 注释：从 pydantic 模块导入 ValidationError。
+# 逻辑注释：引入 Pydantic 校验异常，用来区分配置模型校验错误和业务层自定义校验错误。
 from pydantic import ValidationError
 
-# 注释：从 mem0.configs.base 模块导入 MemoryConfig, MemoryItem。
+# 逻辑注释：MemoryConfig 定义整体配置结构，MemoryItem 统一对外返回的记忆数据形态。
 from mem0.configs.base import MemoryConfig, MemoryItem
-# 注释：从 mem0.configs.enums 模块导入 MemoryType。
+# 逻辑注释：MemoryType 用枚举约束记忆类型，避免用散落的字符串判断业务分支。
 from mem0.configs.enums import MemoryType
-# 注释：从 mem0.configs.prompts 模块批量导入后续列出的对象。
+# 逻辑注释：这些 prompt 负责指导 LLM 从对话中抽取普通记忆或过程性记忆，是 infer 模式的核心输入。
 from mem0.configs.prompts import (
     ADDITIVE_EXTRACTION_PROMPT,
     AGENT_CONTEXT_SUFFIX,
     PROCEDURAL_MEMORY_SYSTEM_PROMPT,
     generate_additive_extraction_prompt,
 )
-# 注释：从 mem0.exceptions 模块导入 ValidationError as Mem0ValidationError。
+# 逻辑注释：使用 mem0 自己的 ValidationError 可以携带 error_code、details、suggestion，错误信息更适合 SDK 用户。
 from mem0.exceptions import ValidationError as Mem0ValidationError
-# 注释：从 mem0.memory.base 模块导入 MemoryBase。
+# 逻辑注释：MemoryBase 提供同步/异步 Memory 的共同抽象，让两套实现保持同一个接口风格。
 from mem0.memory.base import MemoryBase
-# 注释：从 mem0.memory.setup 模块导入 mem0_dir, setup_config。
 from mem0.memory.setup import mem0_dir, setup_config
-# 注释：从 mem0.memory.storage 模块导入 SQLiteManager。
+# 逻辑注释：SQLiteManager 负责保存历史消息和记忆变更历史，向量库只负责语义检索。
 from mem0.memory.storage import SQLiteManager
-# 注释：从 mem0.memory.telemetry 模块导入 MEM0_TELEMETRY, capture_event。
+# 逻辑注释：遥测开关和事件采集用于观察 SDK 调用情况，同时后面会对敏感配置做脱敏。
 from mem0.memory.telemetry import MEM0_TELEMETRY, capture_event
-# 注释：从 mem0.memory.utils 模块批量导入后续列出的对象。
+# 逻辑注释：这些工具函数处理消息解析、JSON 提取、代码块清理和遥测过滤，是 LLM 输出鲁棒性的辅助层。
 from mem0.memory.utils import (
     extract_json,
     parse_messages,
@@ -57,18 +47,18 @@ from mem0.memory.utils import (
     process_telemetry_filters,
     remove_code_blocks,
 )
-# 注释：从 mem0.utils.entity_extraction 模块导入 extract_entities, extract_entities_batch。
+# 逻辑注释：实体抽取用于建立 entity → memory 的反向索引，后续搜索时能做实体增强排序。
 from mem0.utils.entity_extraction import extract_entities, extract_entities_batch
-# 注释：从 mem0.utils.factory 模块批量导入后续列出的对象。
+# 逻辑注释：Factory 根据配置动态创建 embedder、LLM、reranker、vector store，避免 Memory 直接绑定某个 provider。
 from mem0.utils.factory import (
     EmbedderFactory,
     LlmFactory,
     RerankerFactory,
     VectorStoreFactory,
 )
-# 注释：从 mem0.utils.lemmatization 模块导入 lemmatize_for_bm25。
+# 逻辑注释：词形归一化结果会进入 payload，供 BM25/关键词检索使用。
 from mem0.utils.lemmatization import lemmatize_for_bm25
-# 注释：从 mem0.utils.scoring 模块批量导入后续列出的对象。
+# 逻辑注释：检索阶段会融合语义分数、BM25 分数和实体增强分数，这里导入对应权重和排序函数。
 from mem0.utils.scoring import (
     ENTITY_BOOST_WEIGHT,
     get_bm25_params,
@@ -77,17 +67,19 @@ from mem0.utils.scoring import (
 )
 
 # Suppress SWIG deprecation warnings globally
+# 逻辑注释：全局压制 SWIG 相关弃用告警，避免底层依赖的噪声影响 SDK 使用者日志。
 warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*SwigPy.*")
-# 注释：配置 warnings 过滤规则。
 warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*swigvarlink.*")
 
 # Initialize logger early for util functions
+# 逻辑注释：提前创建模块级 logger，后续 helper 和类方法都复用同一个日志入口。
 logger = logging.getLogger(__name__)
 
 
 # Fields that hold runtime auth/connection objects and must be preserved.
 # These are non-serializable objects (e.g. AWSV4SignerAuth, RequestsHttpConnection)
 # needed by clients like OpenSearch — not sensitive strings to redact.
+# 逻辑注释：这些字段虽然可能叫 auth/connection，但实际是运行时连接对象，复制配置时必须保留，否则客户端会失效。
 _RUNTIME_FIELDS = frozenset({
     "http_auth",
     "auth",
@@ -96,6 +88,7 @@ _RUNTIME_FIELDS = frozenset({
 })
 
 # Fields that are known to contain sensitive secrets and must be redacted.
+# 逻辑注释：这些字段名被视为确定的密钥/凭证，进入遥测或克隆兜底时应清空，避免泄露。
 _SENSITIVE_FIELDS_EXACT = frozenset({
     "api_key",
     "secret_key",
@@ -118,6 +111,7 @@ _SENSITIVE_FIELDS_EXACT = frozenset({
 })
 
 # Suffixes that indicate a field likely holds a secret value.
+# 逻辑注释：后缀规则用来兜住 db_password、auth_token 这类不在精确列表里的敏感字段。
 _SENSITIVE_SUFFIXES = (
     "_password",
     "_secret",
@@ -127,24 +121,25 @@ _SENSITIVE_SUFFIXES = (
 )
 
 # Entity parameters that must be passed via filters, not top-level kwargs
+# 逻辑注释：实体作用域参数集中定义，后面用同一份集合做校验和 filters 构造，减少规则漂移。
 ENTITY_PARAMS = frozenset({"user_id", "agent_id", "run_id"})
 
 
-# 注释：禁止在顶层参数中直接传入实体 ID。
+# 逻辑注释：统一拒绝旧式顶层 user_id/agent_id/run_id 参数，强制调用方走 filters，避免同一个 API 出现两套作用域入口。
 def _reject_top_level_entity_params(kwargs: Dict[str, Any], method_name: str) -> None:
     """Reject top-level entity parameters - must use filters instead."""
-    # 注释：计算并保存 invalid_keys 变量，供后续逻辑使用。
+    # 逻辑注释：取交集能一次找出所有误传到顶层的实体作用域参数，错误提示也更完整。
     invalid_keys = ENTITY_PARAMS & set(kwargs.keys())
-    # 注释：判断条件 `invalid_keys` 是否成立。
+    # 逻辑注释：只要发现旧式顶层作用域参数就立即拒绝，避免和 filters 里的作用域发生冲突。
     if invalid_keys:
-        # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+        # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
         raise ValueError(
             f"Top-level entity parameters {invalid_keys} are not supported in {method_name}(). "
             f"Use filters={{'user_id': '...'}} instead."
         )
 
 
-# 注释：校验并规范化实体 ID。
+# 逻辑注释：先清洗再校验实体 ID，保证后续 metadata/filter 使用的是稳定、无空白歧义的作用域键。
 def _validate_and_trim_entity_id(value: Optional[str], name: str) -> Optional[str]:
     """
     Validates and normalizes an entity ID.
@@ -162,29 +157,28 @@ def _validate_and_trim_entity_id(value: Optional[str], name: str) -> Optional[st
     Raises:
         ValueError: If entity ID is invalid
     """
-    # 注释：判断条件 `value is None` 是否成立。
+    # 逻辑注释：None 表示调用方没有传这个 ID，不参与后续作用域过滤。
     if value is None:
-        # 注释：返回 `None` 给调用方。
+        # 逻辑注释：没有可用结果时显式返回 None，让调用方能区分“没找到”和异常。
         return None
-    # 注释：计算并保存 trimmed 变量，供后续逻辑使用。
+    # 逻辑注释：先去掉首尾空白，既允许用户输入有轻微格式问题，也避免把空格算进 ID。
     trimmed = value.strip()
-    # 注释：判断条件 `trimmed == ""` 是否成立。
+    # 逻辑注释：去空白后为空说明没有真正的标识符，继续存储会导致作用域不可控。
     if trimmed == "":
-        # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+        # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
         raise ValueError(
             f"Invalid {name}: cannot be empty or whitespace-only. Provide a valid identifier."
         )
-    # 注释：判断条件 `any(c.isspace() for c in trimmed)` 是否成立。
+    # 逻辑注释：内部空白会让一个 ID 看起来像多个 token，因此直接禁止，减少过滤歧义。
     if any(c.isspace() for c in trimmed):
-        # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+        # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
         raise ValueError(
             f"Invalid {name}: cannot contain whitespace. Provide a valid identifier without spaces."
         )
-    # 注释：返回 `trimmed` 给调用方。
     return trimmed
 
 
-# 注释：校验搜索参数是否合法。
+# 逻辑注释：在真正查询前集中校验阈值和返回数量，避免非法参数传到向量库后才报更难定位的错误。
 def _validate_search_params(threshold: Optional[float] = None, top_k: Optional[int] = None) -> None:
     """
     Validates search parameters.
@@ -196,33 +190,33 @@ def _validate_search_params(threshold: Optional[float] = None, top_k: Optional[i
     Raises:
         ValueError: If threshold or top_k are invalid
     """
-    # 注释：判断条件 `threshold is not None` 是否成立。
+    # 逻辑注释：threshold 可选；只有调用方传了值才需要校验类型和范围。
     if threshold is not None:
-        # 注释：判断条件 `not isinstance(threshold, (int, float))` 是否成立。
+        # 逻辑注释：阈值必须能参与数值比较，字符串等类型不能传进排序逻辑。
         if not isinstance(threshold, (int, float)):
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError("threshold must be a valid number")
-        # 注释：判断条件 `threshold < 0 or threshold > 1` 是否成立。
+        # 逻辑注释：相似度阈值按归一化分数处理，所以合法范围固定在 0 到 1。
         if threshold < 0 or threshold > 1:
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError(
                 f"Invalid threshold: {threshold}. Must be between 0 and 1 (inclusive)."
             )
-    # 注释：判断条件 `top_k is not None` 是否成立。
+    # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
     if top_k is not None:
-        # 注释：判断条件 `not isinstance(top_k, int) or isinstance(top_k, bool)` 是否成立。
+        # 逻辑注释：top_k 控制返回条数，必须是真正整数；bool 虽是 int 子类但语义不对，所以排除。
         if not isinstance(top_k, int) or isinstance(top_k, bool):
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError("top_k must be a valid integer")
-        # 注释：判断条件 `top_k < 0` 是否成立。
+        # 逻辑注释：负数返回条数没有意义，提前拒绝能避免向量库实现差异。
         if top_k < 0:
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError(
                 f"Invalid top_k: {top_k}. Must be a non-negative integer."
             )
 
 
-# 注释：判断字段是否属于敏感字段。
+# 逻辑注释：按“运行时对象优先保留、敏感字段再脱敏”的顺序判断字段，兼顾可用性和遥测安全。
 def _is_sensitive_field(field_name: str) -> bool:
     """Check if a field should be redacted for telemetry safety.
 
@@ -231,97 +225,77 @@ def _is_sensitive_field(field_name: str) -> bool:
     2. Exact deny list — known secret field names.
     3. Suffix deny list — catches patterns like db_password, auth_secret, etc.
     """
-    # 注释：计算并保存 name 变量，供后续逻辑使用。
+    # 逻辑注释：字段名统一小写并去空白，保证敏感字段匹配不受大小写或格式影响。
     name = field_name.lower().strip()
-    # 注释：判断条件 `name in _RUNTIME_FIELDS` 是否成立。
+    # 逻辑注释：运行时连接对象优先放行，即使名字里有 auth，也不能被误判为要脱敏的字符串密钥。
     if name in _RUNTIME_FIELDS:
-        # 注释：返回 `False` 给调用方。
         return False
-    # 注释：判断条件 `name in _SENSITIVE_FIELDS_EXACT` 是否成立。
+    # 逻辑注释：精确命中的密钥字段直接判定为敏感，避免进入遥测或日志。
     if name in _SENSITIVE_FIELDS_EXACT:
-        # 注释：返回 `True` 给调用方。
         return True
-    # 注释：返回 `any(name.endswith(suffix) for suffix in _SENSITIVE_SUFFIXES)` 给调用方。
     return any(name.endswith(suffix) for suffix in _SENSITIVE_SUFFIXES)
 
 
-# 注释：安全复制配置对象并处理不可序列化字段。
+# 逻辑注释：复制配置时兼容不可序列化对象：先尝试 deepcopy，失败后退化为字典重建，同时保留连接对象、脱敏密钥。
 def _safe_deepcopy_config(config):
     """Safely deepcopy config, falling back to dict-based cloning for non-serializable objects."""
-    # 注释：进入可能抛出异常的代码块。
     try:
-        # 注释：返回 `deepcopy(config)` 给调用方。
         return deepcopy(config)
-    # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+    # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
     except Exception as e:
-        # 注释：输出调试日志。
         logger.debug(f"Deepcopy failed, using dict-based cloning: {e}")
 
-        # 注释：计算并保存 config_class 变量，供后续逻辑使用。
+        # 逻辑注释：记录原配置类型，后面重建时尽量返回同类对象，而不是裸 dict。
         config_class = type(config)
 
-        # 注释：判断条件 `hasattr(config, "model_dump")` 是否成立。
+        # 逻辑注释：Pydantic v2 模型优先用 model_dump 导出，字段处理比直接读 __dict__ 更规范。
         if hasattr(config, "model_dump"):
-            # 注释：进入可能抛出异常的代码块。
             try:
-                # 注释：计算并保存 clone_dict 变量，供后续逻辑使用。
                 clone_dict = config.model_dump()
-            # 注释：捕获 Exception 异常并执行降级或错误处理。
+            # 逻辑注释：这里进入兜底路径，通常会从批量操作退化为逐条处理，提升整体成功率。
             except Exception:
-                # 注释：计算并保存 clone_dict 变量，供后续逻辑使用。
+                # 逻辑注释：无法走模型导出时，退回到对象属性字典，至少保留可见配置字段。
                 clone_dict = dict(config.__dict__)
-        # 注释：处理前面条件不成立时的默认分支。
         else:
-            # 注释：计算并保存 clone_dict 变量，供后续逻辑使用。
+            # 逻辑注释：无法走模型导出时，退回到对象属性字典，至少保留可见配置字段。
             clone_dict = dict(config.__dict__)
 
         # Restore runtime fields, redact sensitive ones
+        # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
         for field_name in list(clone_dict.keys()):
-            # 注释：判断条件 `field_name in _RUNTIME_FIELDS and hasattr(config, field_name)` 是否成立。
+            # 逻辑注释：运行时连接对象优先放行，即使名字里有 auth，也不能被误判为要脱敏的字符串密钥。
             if field_name in _RUNTIME_FIELDS and hasattr(config, field_name):
-                # 注释：计算并保存 clone_dict 变量，供后续逻辑使用。
                 clone_dict[field_name] = getattr(config, field_name)
-            # 注释：当前一个条件不成立时，继续判断 `_is_sensitive_field(field_name)`。
+            # 逻辑注释：这是对前面判断的补充分支，用来兼容另一种输入/配置形态。
             elif _is_sensitive_field(field_name):
-                # 注释：计算并保存 clone_dict 变量，供后续逻辑使用。
                 clone_dict[field_name] = None
 
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：返回 `config_class(**clone_dict)` 给调用方。
             return config_class(**clone_dict)
-        # 注释：捕获 Exception 异常并执行降级或错误处理。
+        # 逻辑注释：这里进入兜底路径，通常会从批量操作退化为逐条处理，提升整体成功率。
         except Exception:
-            # 注释：输出调试日志。
             logger.debug("Config reconstruction failed, returning shallow dict clone")
-            # 注释：返回 `type("Config", (), clone_dict)()` 给调用方。
             return type("Config", (), clone_dict)()
 
 
-# 注释：将带时区的 ISO 时间转换为 UTC。
+# 逻辑注释：只把带时区的 ISO 时间统一成 UTC；没有时区或无法解析的字符串保持原样，避免误改调用方语义。
 def _normalize_iso_timestamp_to_utc(timestamp: Optional[str]) -> Optional[str]:
     """Normalize timezone-aware ISO timestamps to UTC without rewriting naive values."""
-    # 注释：判断条件 `not timestamp` 是否成立。
+    # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
     if not timestamp:
-        # 注释：返回 `timestamp` 给调用方。
         return timestamp
-    # 注释：进入可能抛出异常的代码块。
     try:
-        # 注释：计算并保存 parsed 变量，供后续逻辑使用。
+        # 逻辑注释：只解析标准 ISO 字符串；解析失败说明输入可能是自定义格式，应保持原值。
         parsed = datetime.fromisoformat(timestamp)
-    # 注释：捕获 ValueError 异常并执行降级或错误处理。
     except ValueError:
-        # 注释：返回 `timestamp` 给调用方。
         return timestamp
-    # 注释：判断条件 `parsed.tzinfo is None` 是否成立。
+    # 逻辑注释：没有时区信息的时间不能安全换算成 UTC，所以这里不做假设。
     if parsed.tzinfo is None:
-        # 注释：返回 `timestamp` 给调用方。
         return timestamp
-    # 注释：返回 `parsed.astimezone(timezone.utc).isoformat()` 给调用方。
     return parsed.astimezone(timezone.utc).isoformat()
 
 
-# 注释：构造写入元数据和查询过滤条件。
+# 逻辑注释：把一次调用里的作用域信息拆成“写入 metadata 模板”和“查询 filters”，这样新增和检索能使用一致的会话边界。
 def _build_filters_and_metadata(
     *,  # Enforce keyword-only arguments
     user_id: Optional[str] = None,
@@ -366,51 +340,43 @@ def _build_filters_and_metadata(
               scoped to the provided session(s) and potentially a resolved actor.
     """
 
-    # 注释：深拷贝生成 base_metadata_template 变量，避免修改原始输入对象。
+    # 逻辑注释：复制外部 metadata，后面会追加作用域字段；复制能避免修改调用方传入的原对象。
     base_metadata_template = deepcopy(input_metadata) if input_metadata else {}
-    # 注释：深拷贝生成 effective_query_filters 变量，避免修改原始输入对象。
+    # 逻辑注释：查询 filters 也复制一份，保证内部补充 actor/session 条件时不会污染调用方数据。
     effective_query_filters = deepcopy(input_filters) if input_filters else {}
 
     # ---------- validate and add all provided session ids ----------
+    # 逻辑注释：记录实际提供了哪些 session id，用于最后判断是否有作用域边界。
     session_ids_provided = []
 
     # Validate and trim entity IDs
+    # 逻辑注释：所有 session id 在进入 metadata/filter 前统一清洗，保证存储和查询使用同一种规范值。
     user_id = _validate_and_trim_entity_id(user_id, "user_id")
-    # 注释：计算并保存 agent_id 变量，供后续逻辑使用。
     agent_id = _validate_and_trim_entity_id(agent_id, "agent_id")
-    # 注释：计算并保存 run_id 变量，供后续逻辑使用。
+    # 逻辑注释：所有 session id 在进入 metadata/filter 前统一清洗，保证存储和查询使用同一种规范值。
     run_id = _validate_and_trim_entity_id(run_id, "run_id")
 
-    # 注释：判断条件 `user_id` 是否成立。
+    # 逻辑注释：有 user_id 时同时写入 metadata 和 filters，新增记忆和查询旧记忆会落在同一个用户作用域。
     if user_id:
-        # 注释：计算并保存 base_metadata_template 变量，供后续逻辑使用。
         base_metadata_template["user_id"] = user_id
-        # 注释：计算并保存 effective_query_filters 变量，供后续逻辑使用。
         effective_query_filters["user_id"] = user_id
-        # 注释：调用 session_ids_provided.append 执行对应操作。
         session_ids_provided.append("user_id")
 
-    # 注释：判断条件 `agent_id` 是否成立。
+    # 逻辑注释：agent_id 也参与存储和过滤，支持按 agent 维度隔离记忆。
     if agent_id:
-        # 注释：计算并保存 base_metadata_template 变量，供后续逻辑使用。
         base_metadata_template["agent_id"] = agent_id
-        # 注释：计算并保存 effective_query_filters 变量，供后续逻辑使用。
         effective_query_filters["agent_id"] = agent_id
-        # 注释：调用 session_ids_provided.append 执行对应操作。
         session_ids_provided.append("agent_id")
 
-    # 注释：判断条件 `run_id` 是否成立。
+    # 逻辑注释：run_id 用于一次运行/会话级别的隔离，适合临时任务或批处理场景。
     if run_id:
-        # 注释：计算并保存 base_metadata_template 变量，供后续逻辑使用。
         base_metadata_template["run_id"] = run_id
-        # 注释：计算并保存 effective_query_filters 变量，供后续逻辑使用。
         effective_query_filters["run_id"] = run_id
-        # 注释：调用 session_ids_provided.append 执行对应操作。
         session_ids_provided.append("run_id")
 
-    # 注释：判断条件 `not session_ids_provided` 是否成立。
+    # 逻辑注释：没有任何 session id 就没有记忆边界，直接拒绝，避免把所有用户/agent 的记忆混在一起。
     if not session_ids_provided:
-        # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+        # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
         raise Mem0ValidationError(
             message="At least one of 'user_id', 'agent_id', or 'run_id' must be provided.",
             error_code="VALIDATION_001",
@@ -419,169 +385,168 @@ def _build_filters_and_metadata(
         )
 
     # ---------- optional actor filter ----------
+    # 逻辑注释：actor 过滤优先使用显式参数，其次沿用 filters 中已有 actor_id，保证调用方可以按说话人缩小查询。
     resolved_actor_id = actor_id or effective_query_filters.get("actor_id")
-    # 注释：判断条件 `resolved_actor_id` 是否成立。
+    # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
     if resolved_actor_id:
-        # 注释：计算并保存 effective_query_filters 变量，供后续逻辑使用。
+        # 逻辑注释：actor_id 只加入查询 filters，不加入写入模板，因为写入时 actor 通常来自具体 message。
         effective_query_filters["actor_id"] = resolved_actor_id
 
-    # 注释：返回 `base_metadata_template, effective_query_filters` 给调用方。
     return base_metadata_template, effective_query_filters
 
 
-# 注释：根据过滤条件构造确定性的会话作用域字符串。
+# 逻辑注释：把多个实体 ID 排序拼成稳定字符串，用作历史消息的会话键，避免字典顺序造成不同 key。
 def _build_session_scope(filters):
     """Build deterministic session scope string from entity IDs."""
-    # 注释：初始化 parts 变量 为空列表，用于后续收集数据。
     parts = []
-    # 注释：遍历 sorted(["user_id", "agent_id", "run_id"]) 中的元素，并将当前项赋给 key。
+    # 逻辑注释：按固定顺序拼接作用域字段，使同一组 filters 永远得到同一个 session_scope。
     for key in sorted(["user_id", "agent_id", "run_id"]):
-        # 注释：计算并保存 val 变量，供后续逻辑使用。
         val = filters.get(key)
-        # 注释：判断条件 `val` 是否成立。
+        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
         if val:
-            # 注释：调用 parts.append 执行对应操作。
+            # 逻辑注释：只把有值的实体 ID 放入 scope，避免 None/空值影响历史消息分组。
             parts.append(f"{key}={val}")
-    # 注释：返回 `"&".join(parts)` 给调用方。
     return "&".join(parts)
 
 
-# 注释：初始化 mem0 运行配置。
+# 逻辑注释：模块加载时先执行配置初始化，确保默认目录/配置文件等运行前置条件已经准备好。
 setup_config()
-# 注释：计算并保存 日志记录器，供后续逻辑使用。
+# 逻辑注释：提前创建模块级 logger，后续 helper 和类方法都复用同一个日志入口。
 logger = logging.getLogger(__name__)
 
 
-# 注释：定义 Memory 类，并继承/使用 (MemoryBase) 中的基础能力。
+# 逻辑注释：同步版 Memory 实现，对外暴露增删改查和搜索；内部负责 LLM 抽取、向量存储、历史记录和实体索引。
 class Memory(MemoryBase):
-    # 注释：初始化 Memory 实例并创建模型、向量库、数据库等依赖。
+    # 逻辑注释：初始化 Memory 实例需要把配置里的各类 provider 变成真实客户端，并准备向量库、LLM、SQLite 历史库和可选 reranker。
     def __init__(self, config: MemoryConfig = MemoryConfig()):
-        # 注释：设置当前实例的 config 属性，用于后续方法共享状态。
+        # 逻辑注释：把配置保存到实例上，后续所有 provider 初始化、路径和版本信息都从这里读取。
         self.config = config
 
-        # 注释：设置当前实例的 embedding_model 属性，用于后续方法共享状态。
+        # 逻辑注释：根据配置创建 embedding 模型；Memory 不关心具体 provider，只依赖统一 embed 接口。
         self.embedding_model = EmbedderFactory.create(
             self.config.embedder.provider,
             self.config.embedder.config,
             self.config.vector_store.config,
         )
-        # 注释：设置当前实例的 vector_store 属性，用于后续方法共享状态。
+        # 逻辑注释：创建向量存储后，记忆文本的向量和 payload 都会通过它进行插入、查询、更新和删除。
         self.vector_store = VectorStoreFactory.create(
             self.config.vector_store.provider, self.config.vector_store.config
         )
-        # 注释：设置当前实例的 llm 属性，用于后续方法共享状态。
+        # 逻辑注释：创建 LLM 客户端，infer/procedural 模式会用它从对话中抽取或总结记忆。
         self.llm = LlmFactory.create(self.config.llm.provider, self.config.llm.config)
-        # 注释：设置当前实例的 db 属性，用于后续方法共享状态。
+        # 逻辑注释：SQLite 用来保存消息上下文和变更历史，和向量库形成“语义索引 + 审计记录”的双存储结构。
         self.db = SQLiteManager(self.config.history_db_path)
-        # 注释：设置当前实例的 collection_name 属性，用于后续方法共享状态。
+        # 逻辑注释：保存主记忆 collection 名，实体库会基于这个名字派生出独立 collection。
         self.collection_name = self.config.vector_store.config.collection_name
-        # 注释：设置当前实例的 api_version 属性，用于后续方法共享状态。
+        # 逻辑注释：保存 API 版本，遥测事件会带上它，便于区分不同版本的行为。
         self.api_version = self.config.version
-        # 注释：设置当前实例的 custom_instructions 属性，用于后续方法共享状态。
+        # 逻辑注释：全局自定义指令会在 LLM 抽取记忆时作为默认额外要求。
         self.custom_instructions = self.config.custom_instructions
 
         # Initialize reranker if configured
+        # 逻辑注释：reranker 默认不启用；只有配置显式提供时才创建，避免额外依赖和成本。
         self.reranker = None
-        # 注释：判断条件 `config.reranker` 是否成立。
+        # 逻辑注释：检测到 reranker 配置才初始化二次排序器，搜索时也会按开关选择是否使用。
         if config.reranker:
-            # 注释：设置当前实例的 reranker 属性，用于后续方法共享状态。
+            # 逻辑注释：通过工厂创建 reranker，使不同重排模型可以用同一套 Memory 搜索逻辑接入。
             self.reranker = RerankerFactory.create(
                 config.reranker.provider,
                 config.reranker.config
             )
 
         # Entity store is initialized lazily on first use
+        # 逻辑注释：实体库先置空，后面通过 property 懒加载，避免不使用实体能力时创建多余向量库。
         self._entity_store = None
 
-        # 注释：判断条件 `MEM0_TELEMETRY` 是否成立。
+        # 逻辑注释：只有遥测开关打开时才准备遥测专用向量库，普通运行不会产生额外存储开销。
         if MEM0_TELEMETRY:
             # Create telemetry config manually to avoid deepcopy issues with thread locks
+            # 逻辑注释：先组装一份遥测用配置字典，后面会覆盖 collection/path 并避免携带原业务 collection。
             telemetry_config_dict = {}
-            # 注释：判断条件 `hasattr(self.config.vector_store.config, 'model_dump')` 是否成立。
+            # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
             if hasattr(self.config.vector_store.config, 'model_dump'):
                 # For pydantic models
+                # 逻辑注释：Pydantic 配置可直接导出为 dict，便于安全地修改遥测 collection。
                 telemetry_config_dict = self.config.vector_store.config.model_dump()
-            # 注释：处理前面条件不成立时的默认分支。
             else:
                 # For other objects, manually copy common attributes
+                # 逻辑注释：非 Pydantic 配置只复制常见连接字段，避免把整个复杂对象原样塞进遥测配置。
                 for attr in ['host', 'port', 'path', 'api_key', 'index_name', 'dimension', 'metric']:
-                    # 注释：判断条件 `hasattr(self.config.vector_store.config, attr)` 是否成立。
+                    # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                     if hasattr(self.config.vector_store.config, attr):
-                        # 注释：计算并保存 telemetry_config_dict 变量，供后续逻辑使用。
                         telemetry_config_dict[attr] = getattr(self.config.vector_store.config, attr)
 
             # Override collection name for telemetry
+            # 逻辑注释：遥测数据写入独立 collection，避免和用户真实记忆混在一起。
             telemetry_config_dict['collection_name'] = "mem0migrations"
 
             # Set path for file-based vector stores
             telemetry_config = _safe_deepcopy_config(self.config.vector_store.config)
-            # 注释：判断条件 `self.config.vector_store.provider in ["faiss", "qdrant"]` 是否成立。
+            # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
             if self.config.vector_store.provider in ["faiss", "qdrant"]:
-                # 注释：计算并保存 provider_path 变量，供后续逻辑使用。
+                # 逻辑注释：文件型向量库需要独立目录，按 provider 名构造迁移/遥测存储路径。
                 provider_path = f"migrations_{self.config.vector_store.provider}"
-                # 注释：计算并保存 telemetry_config_dict 变量，供后续逻辑使用。
                 telemetry_config_dict['path'] = os.path.join(mem0_dir, provider_path)
-                # 注释：确保目标目录存在。
+                # 逻辑注释：目录不存在时提前创建，避免初始化本地向量库时因路径缺失失败。
                 os.makedirs(telemetry_config_dict['path'], exist_ok=True)
 
             # Create the config object using the same class as the original
             telemetry_config = self.config.vector_store.config.__class__(**telemetry_config_dict)
-            # 注释：设置当前实例的 _telemetry_vector_store 属性，用于后续方法共享状态。
+            # 逻辑注释：创建遥测专用向量库客户端，后续 capture_event 可复用这个存储。
             self._telemetry_vector_store = VectorStoreFactory.create(
                 self.config.vector_store.provider, telemetry_config
             )
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：初始化结束后记录一次 init 事件，并标明 sync/async，便于观测两种实现的使用情况。
         capture_event("mem0.init", self, {"sync_type": "sync"})
 
-    # 注释：应用 property 装饰器，调整下面定义的函数或属性行为。
+    # 逻辑注释：把这个方法暴露成只读属性，调用方访问时像字段一样自然，同时内部仍可做懒加载。
     @property
-    # 注释：定义 entity_store 函数/方法，封装一段可复用逻辑。
+    # 逻辑注释：实体向量库采用懒加载：只有真正需要实体链接/增强检索时才创建，减少初始化成本和嵌入式向量库锁冲突。
     def entity_store(self):
         """Lazily initialize entity store on first use."""
-        # 注释：判断条件 `self._entity_store is None` 是否成立。
+        # 逻辑注释：第一次访问实体库才进入初始化，后续直接复用已经创建的实例。
         if self._entity_store is None:
-            # 注释：深拷贝生成 entity_config 变量，避免修改原始输入对象。
+            # 逻辑注释：实体库复用主向量库配置的副本，避免直接修改主记忆 collection 配置。
             entity_config = _safe_deepcopy_config(self.config.vector_store.config)
-            # 注释：计算并保存 entity_collection 变量，供后续逻辑使用。
+            # 逻辑注释：保存主记忆 collection 名，实体库会基于这个名字派生出独立 collection。
             entity_collection = f"{self.collection_name}_entities"
             # Set collection name on the cloned config
+            # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
             if hasattr(entity_config, 'collection_name'):
-                # 注释：计算并保存 collection_name 变量，供后续逻辑使用。
+                # 逻辑注释：把副本的 collection 改成实体 collection，后续实体向量不会写入主记忆库。
                 entity_config.collection_name = entity_collection
-            # 注释：当前一个条件不成立时，继续判断 `isinstance(entity_config, dict)`。
+            # 逻辑注释：这是对前面判断的补充分支，用来兼容另一种输入/配置形态。
             elif isinstance(entity_config, dict):
-                # 注释：计算并保存 entity_config 变量，供后续逻辑使用。
+                # 逻辑注释：把副本的 collection 改成实体 collection，后续实体向量不会写入主记忆库。
                 entity_config['collection_name'] = entity_collection
             # For Qdrant, share the existing client to avoid RocksDB lock contention
             # when using embedded mode (path=...). QdrantConfig.client takes precedence
             # over host/port/path.
+            # 逻辑注释：Qdrant 嵌入式模式下共享已有 client，避免同一路径被多个 RocksDB 实例同时打开导致锁冲突。
             if self.config.vector_store.provider == "qdrant" and hasattr(self.vector_store, "client"):
-                # 注释：判断条件 `hasattr(entity_config, "client")` 是否成立。
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if hasattr(entity_config, "client"):
-                    # 注释：计算并保存 client 变量，供后续逻辑使用。
+                    # 逻辑注释：把主向量库的 client 注入实体配置，实体库和主库共享同一个底层连接。
                     entity_config.client = self.vector_store.client
-                # 注释：当前一个条件不成立时，继续判断 `isinstance(entity_config, dict)`。
+                # 逻辑注释：这是对前面判断的补充分支，用来兼容另一种输入/配置形态。
                 elif isinstance(entity_config, dict):
-                    # 注释：计算并保存 entity_config 变量，供后续逻辑使用。
+                    # 逻辑注释：把主向量库的 client 注入实体配置，实体库和主库共享同一个底层连接。
                     entity_config["client"] = self.vector_store.client
-            # 注释：设置当前实例的 _entity_store 属性，用于后续方法共享状态。
             self._entity_store = VectorStoreFactory.create(
                 self.config.vector_store.provider, entity_config
             )
-        # 注释：返回 `self._entity_store` 给调用方。
         return self._entity_store
 
-    # 注释：新增或更新实体索引记录。
+    # 逻辑注释：把抽取出的实体写入实体库；相似实体复用并追加 memory_id，新实体才新建，形成实体到记忆的反向索引。
     def _upsert_entity(self, entity_text, entity_type, memory_id, filters):
         """Upsert an entity into the entity store, linking it to a memory."""
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：计算并保存 实体向量，供后续逻辑使用。
+            # 逻辑注释：实体也需要单独向量化，才能在实体库里用相似度判断是否已有同一实体。
             entity_embedding = self.embedding_model.embed(entity_text, "add")
-            # 注释：计算并保存 检索过滤条件，供后续逻辑使用。
+            # 逻辑注释：实体检索只使用 session 级作用域字段，保证实体链接不会跨用户/agent/run 串数据。
             search_filters = {k: v for k, v in filters.items() if k in ("user_id", "agent_id", "run_id") and v}
 
-            # 注释：计算并保存 existing 变量，供后续逻辑使用。
+            # 逻辑注释：先在实体库里找最相近的实体，命中足够高时复用节点而不是重复创建。
             existing = self.entity_store.search(
                 query=entity_text,
                 vectors=entity_embedding,
@@ -589,49 +554,45 @@ class Memory(MemoryBase):
                 filters=search_filters,
             )
 
-            # 注释：判断条件 `existing and existing[0].score >= 0.95` 是否成立。
+            # 逻辑注释：0.95 作为近似同实体阈值，只有非常相近时才合并，降低误把不同实体合并的风险。
             if existing and existing[0].score >= 0.95:
                 # Update existing entity's linked_memory_ids
                 match = existing[0]
-                # 注释：计算并保存 向量库载荷数据，供后续逻辑使用。
                 payload = match.payload or {}
-                # 注释：计算并保存 linked_ids 变量，供后续逻辑使用。
+                # 逻辑注释：实体 payload 里维护反向链接列表，用来知道这个实体关联了哪些记忆。
                 linked_ids = payload.get("linked_memory_ids", [])
-                # 注释：判断条件 `memory_id not in linked_ids` 是否成立。
+                # 逻辑注释：只有新记忆 ID 不在列表里才追加，避免重复链接导致后续 boost 被放大。
                 if memory_id not in linked_ids:
-                    # 注释：调用 linked_ids.append 执行对应操作。
                     linked_ids.append(memory_id)
-                    # 注释：计算并保存 向量库载荷数据，供后续逻辑使用。
                     payload["linked_memory_ids"] = linked_ids
-                    # 注释：调用 self.entity_store.update 执行对应操作。
                     self.entity_store.update(
                         vector_id=match.id,
                         vector=None,
                         payload=payload,
                     )
-            # 注释：处理前面条件不成立时的默认分支。
             else:
                 # Create new entity
+                # 逻辑注释：新实体需要独立 ID，和 memory_id 分开管理，便于实体库单独增删改查。
                 entity_id = str(uuid.uuid4())
-                # 注释：计算并保存 entity_payload 变量，供后续逻辑使用。
+                # 逻辑注释：实体 payload 同时保存实体文本、类型、关联记忆和 session 过滤字段，后续搜索/清理都依赖这些信息。
                 entity_payload = {
                     "data": entity_text,
                     "entity_type": entity_type,
                     "linked_memory_ids": [memory_id],
                     **{k: v for k, v in search_filters.items()},
                 }
-                # 注释：调用 self.entity_store.insert 执行对应操作。
+                # 逻辑注释：把新实体向量和 payload 写入实体库，建立实体索引。
                 self.entity_store.insert(
                     vectors=[entity_embedding],
                     ids=[entity_id],
                     payloads=[entity_payload],
                 )
-        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
         except Exception as e:
-            # 注释：输出警告日志。
+            # 逻辑注释：实体索引失败不应影响主记忆写入，所以这里只记录警告而不是抛出。
             logger.warning(f"Entity upsert failed for '{entity_text}': {e}")
 
-    # 注释：从实体索引中移除某条记忆的关联。
+    # 逻辑注释：删除或更新记忆后清理实体索引：从实体的 linked_memory_ids 中移除该 memory_id，孤立实体直接删除。
     def _remove_memory_from_entity_store(self, memory_id, filters):
         """Strip `memory_id` from every entity record scoped to `filters`.
 
@@ -645,160 +606,125 @@ class Memory(MemoryBase):
         failures are swallowed at warning level so the primary delete/update
         path is never broken by entity cleanup.
         """
-        # 注释：判断条件 `self._entity_store is None` 是否成立。
+        # 逻辑注释：第一次访问实体库才进入初始化，后续直接复用已经创建的实例。
         if self._entity_store is None:
-            # 注释：结束函数并返回空值。
             return
-        # 注释：计算并保存 检索过滤条件，供后续逻辑使用。
+        # 逻辑注释：实体检索只使用 session 级作用域字段，保证实体链接不会跨用户/agent/run 串数据。
         search_filters = {k: v for k, v in filters.items() if k in ("user_id", "agent_id", "run_id") and v}
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：计算并保存 listed 变量，供后续逻辑使用。
+            # 逻辑注释：清理时先列出当前作用域下的实体，再逐个检查是否链接了待删除/更新的记忆。
             listed = self.entity_store.list(filters=search_filters, top_k=10000)
-            # 注释：计算并保存 rows 变量，供后续逻辑使用。
+            # 逻辑注释：不同向量库 list 返回格式不一致，这里兼容嵌套列表和扁平列表两种结构。
             rows = listed[0] if isinstance(listed, (list, tuple)) and listed and isinstance(listed[0], list) else listed
-            # 注释：遍历 rows or [] 中的元素，并将当前项赋给 row。
+            # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
             for row in rows or []:
-                # 注释：进入可能抛出异常的代码块。
                 try:
-                    # 注释：计算并保存 向量库载荷数据，供后续逻辑使用。
+                    # 逻辑注释：实体行可能来自不同实现，统一用 getattr 安全取 payload。
                     payload = getattr(row, "payload", None) or {}
-                    # 注释：计算并保存 linked 变量，供后续逻辑使用。
                     linked = payload.get("linked_memory_ids", [])
-                    # 注释：判断条件 `not isinstance(linked, list) or memory_id not in linked` 是否成立。
+                    # 逻辑注释：linked_memory_ids 不是列表或不包含目标 memory_id 时，说明这条实体不需要处理。
                     if not isinstance(linked, list) or memory_id not in linked:
-                        # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                         continue
-                    # 注释：计算并保存 remaining 变量，供后续逻辑使用。
+                    # 逻辑注释：构造移除目标 memory_id 后的新链接列表，用于判断实体是否还被其他记忆引用。
                     remaining = [mid for mid in linked if mid != memory_id]
-                    # 注释：判断条件 `not remaining` 是否成立。
+                    # 逻辑注释：没有任何记忆再引用该实体时，实体节点已经孤立，可以删除。
                     if not remaining:
-                        # 注释：进入可能抛出异常的代码块。
                         try:
-                            # 注释：调用 self.entity_store.delete 执行对应操作。
+                            # 逻辑注释：删除孤立实体，避免实体库里留下无法增强任何记忆的脏数据。
                             self.entity_store.delete(vector_id=row.id)
-                        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                         except Exception as e:
-                            # 注释：输出调试日志。
                             logger.debug(f"Entity delete failed for id={row.id}: {e}")
-                    # 注释：处理前面条件不成立时的默认分支。
                     else:
-                        # 注释：计算并保存 实体文本，供后续逻辑使用。
+                        # 逻辑注释：实体仍被其他记忆引用时，需要取出实体文本重新生成向量以满足 update 接口要求。
                         entity_text = payload.get("data")
-                        # 注释：判断条件 `not isinstance(entity_text, str) or not entity_text` 是否成立。
+                        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                         if not isinstance(entity_text, str) or not entity_text:
-                            # 注释：输出调试日志。
                             logger.debug(f"Entity id={row.id} missing 'data'; skipping update during cleanup")
-                            # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                             continue
-                        # 注释：进入可能抛出异常的代码块。
                         try:
-                            # 注释：计算并保存 vec 变量，供后续逻辑使用。
+                            # 逻辑注释：有些向量库 update 要求同时传 vector，所以这里即使只改 payload 也重新计算实体向量。
                             vec = self.embedding_model.embed(entity_text, "update")
-                        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                         except Exception as e:
-                            # 注释：输出调试日志。
                             logger.debug(f"Entity re-embed failed for '{entity_text}': {e}")
-                            # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                             continue
-                        # 注释：计算并保存 new_payload 变量，供后续逻辑使用。
+                        # 逻辑注释：保留实体原有信息，只替换 linked_memory_ids，避免丢失 entity_type/session 等字段。
                         new_payload = {**payload, "linked_memory_ids": remaining}
-                        # 注释：进入可能抛出异常的代码块。
                         try:
-                            # 注释：调用 self.entity_store.update 执行对应操作。
                             self.entity_store.update(
                                 vector_id=row.id,
                                 vector=vec,
                                 payload=new_payload,
                             )
-                        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                         except Exception as e:
-                            # 注释：输出调试日志。
                             logger.debug(f"Entity update failed for id={row.id}: {e}")
-                # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                 except Exception as e:
-                    # 注释：输出调试日志。
                     logger.debug(f"Entity cleanup error: {e}")
-        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
         except Exception as e:
-            # 注释：输出警告日志。
             logger.warning(f"Entity store cleanup failed for memory_id={memory_id}: {e}")
 
-    # 注释：抽取记忆文本中的实体并建立关联。
+    # 逻辑注释：从单条记忆文本中抽取实体并建立链接，主要用于 update 后把新文本重新挂到实体索引上。
     def _link_entities_for_memory(self, memory_id, text, filters):
         """Extract entities from `text` and link them to `memory_id` in the
         entity store, scoped to `filters`. Simpler single-memory variant of
         Phase 7 in add(): per-entity search-then-update-or-insert via the
         existing `_upsert_entity` helper. Non-fatal on any failure.
         """
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：计算并保存 entities 变量，供后续逻辑使用。
+            # 逻辑注释：从记忆文本抽取实体，只有抽到实体才需要进入实体链接流程。
             entities = extract_entities(text)
-            # 注释：判断条件 `not entities` 是否成立。
+            # 逻辑注释：没有实体时直接返回，避免空循环和不必要的向量库访问。
             if not entities:
-                # 注释：结束函数并返回空值。
                 return
-            # 注释：初始化 seen 变量 为空集合，用于后续去重。
+            # 逻辑注释：用集合在单条文本内去重，避免同一个实体重复 upsert。
             seen = set()
-            # 注释：遍历 entities 中的元素，并将当前项赋给 entity_type, entity_text。
+            # 逻辑注释：逐个处理抽取出的实体，把每个实体都链接到当前记忆。
             for entity_type, entity_text in entities:
-                # 注释：计算并保存 key 变量，供后续逻辑使用。
+                # 逻辑注释：实体去重用小写+去空白后的规范 key，降低大小写和首尾空格带来的重复。
                 key = entity_text.strip().lower()
-                # 注释：判断条件 `not key or key in seen` 是否成立。
+                # 逻辑注释：空实体或已处理实体都跳过，保持实体链接的唯一性。
                 if not key or key in seen:
-                    # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                     continue
-                # 注释：调用 seen.add 执行对应操作。
                 seen.add(key)
-                # 注释：进入可能抛出异常的代码块。
                 try:
-                    # 注释：调用 self._upsert_entity 执行对应操作。
+                    # 逻辑注释：每个有效实体交给 upsert，内部决定复用旧实体还是新建实体。
                     self._upsert_entity(entity_text, entity_type, memory_id, filters)
-                # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                 except Exception as e:
-                    # 注释：输出调试日志。
                     logger.debug(f"Entity link failed for '{entity_text}': {e}")
-        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
         except Exception as e:
-            # 注释：输出警告日志。
             logger.warning(f"Entity linking failed for memory_id={memory_id}: {e}")
 
-    # 注释：应用 classmethod 装饰器，调整下面定义的函数或属性行为。
+    # 逻辑注释：类方法不依赖已有实例，适合作为另一种构造入口。
     @classmethod
-    # 注释：根据字典配置创建 Memory 实例。
+    # 逻辑注释：从普通字典创建配置对象，再交给构造函数；这里把外部配置入口和类初始化解耦。
     def from_config(cls, config_dict: Dict[str, Any]):
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：计算并保存 配置对象，供后续逻辑使用。
             config = cls._process_config(config_dict)
-            # 注释：计算并保存 配置对象，供后续逻辑使用。
             config = MemoryConfig(**config_dict)
-        # 注释：捕获 ValidationError as e 异常并执行降级或错误处理。
+        # 逻辑注释：配置校验错误需要原样抛出，调用方才能看到 Pydantic 提供的具体字段问题。
         except ValidationError as e:
-            # 注释：输出错误日志。
             logger.error(f"Configuration validation error: {e}")
-            # 注释：执行当前语句，推进该函数的业务流程。
             raise
-        # 注释：返回 `cls(config)` 给调用方。
         return cls(config)
 
-    # 注释：应用 staticmethod 装饰器，调整下面定义的函数或属性行为。
+    # 逻辑注释：静态方法不依赖实例状态，这里用于纯配置处理/转换逻辑。
     @staticmethod
-    # 注释：预处理配置字典。
+    # 逻辑注释：当前只是透传配置，保留这个钩子方便以后在构造 MemoryConfig 前做兼容性转换。
     def _process_config(config_dict: Dict[str, Any]) -> Dict[str, Any]:
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：返回 `config_dict` 给调用方。
             return config_dict
-        # 注释：捕获 ValidationError as e 异常并执行降级或错误处理。
+        # 逻辑注释：配置校验错误需要原样抛出，调用方才能看到 Pydantic 提供的具体字段问题。
         except ValidationError as e:
-            # 注释：输出错误日志。
             logger.error(f"Configuration validation error: {e}")
-            # 注释：执行当前语句，推进该函数的业务流程。
             raise
 
-    # 注释：定义 _should_use_agent_memory_extraction 函数/方法，封装一段可复用逻辑。
+    # 逻辑注释：根据是否有 agent_id 且消息里是否出现 assistant，决定记忆应偏向 agent 视角还是 user 视角。
     def _should_use_agent_memory_extraction(self, messages, metadata):
         """Determine whether to use agent memory extraction based on the logic:
         - If agent_id is present and messages contain assistant role -> True
@@ -820,7 +746,7 @@ class Memory(MemoryBase):
         # Use agent memory extraction if agent_id is present and there are assistant messages
         return has_agent_id and has_assistant_messages
 
-    # 注释：新增记忆入口，负责校验输入并写入记忆。
+    # 逻辑注释：新增记忆的公共入口：先确定作用域和输入格式，再按 procedural/raw/infer 三条路径分流。
     def add(
         self,
         messages,
@@ -855,10 +781,11 @@ class Memory(MemoryBase):
                 are treated as general conversational/factual memories.
             prompt (str, optional): Prompt to use for the memory creation. Defaults to None.
 
+
         Returns:
             dict: A dictionary containing the result of the memory addition operation, typically
-                including a list of memory items affected (added, updated) under a "results" key.
-                Example for v1.1+: `{"results": [{"id": "...", "memory": "...", "event": "ADD"}]}`
+                  including a list of memory items affected (added, updated) under a "results" key.
+                  Example for v1.1+: `{"results": [{"id": "...", "memory": "...", "event": "ADD"}]}`
 
         Raises:
             Mem0ValidationError: If input validation fails (invalid memory_type, messages format, etc.).
@@ -868,7 +795,7 @@ class Memory(MemoryBase):
             DatabaseError: If database operations fail.
         """
 
-        # Step 1: 构造有效的 metadata 和 filters，用于后续存储和检索
+        # 逻辑注释：新增记忆前先统一构造 metadata 和 filters，保证写入、检索旧记忆和历史上下文使用同一作用域。
         processed_metadata, effective_filters = _build_filters_and_metadata(
             user_id=user_id,
             agent_id=agent_id,
@@ -876,9 +803,9 @@ class Memory(MemoryBase):
             input_metadata=metadata,
         )
 
-        # Step 2: 校验 memory_type，如果指定了 type 且不是 procedural_memory，抛出异常
+        # 逻辑注释：当前只额外支持 procedural_memory；其他 memory_type 会让调用方误以为有别的处理逻辑，因此拒绝。
         if memory_type is not None and memory_type != MemoryType.PROCEDURAL.value:
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise Mem0ValidationError(
                 message=f"Invalid 'memory_type'. Please pass {MemoryType.PROCEDURAL.value} to create procedural memories.",
                 error_code="VALIDATION_002",
@@ -886,19 +813,19 @@ class Memory(MemoryBase):
                 suggestion=f"Use '{MemoryType.PROCEDURAL.value}' to create procedural memories."
             )
 
-        # Step 3: 规范化 messages 输入
+        # 逻辑注释：单字符串输入被包装成 user 消息，方便后续统一按消息列表处理。
         if isinstance(messages, str):
-            # 如果是字符串，封装为 [{"role": "user", "content": messages}]
+            # 逻辑注释：把简写输入转换成标准 role/content 结构，后面的解析和 LLM prompt 不需要再分支处理。
             messages = [{"role": "user", "content": messages}]
 
-        # 注释：当前一个条件不成立时，继续判断 `isinstance(messages, dict)`。
+        # 逻辑注释：这是对前面判断的补充分支，用来兼容另一种输入/配置形态。
         elif isinstance(messages, dict):
-            # 如果是单个字典，封装为列表
+            # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
             messages = [messages]
 
-        # 注释：当前一个条件不成立时，继续判断 `not isinstance(messages, list)`。
+        # 逻辑注释：这是对前面判断的补充分支，用来兼容另一种输入/配置形态。
         elif not isinstance(messages, list):
-            # 非 list / dict / str 输入类型抛出异常
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise Mem0ValidationError(
                 message="messages must be str, dict, or list[dict]",
                 error_code="VALIDATION_003",
@@ -906,82 +833,68 @@ class Memory(MemoryBase):
                 suggestion="Convert your input to a string, dictionary, or list of dictionaries."
             )
 
-        # Step 4: 如果是 procedural memory 并且提供了 agent_id，则调用专门的创建函数
+        # 逻辑注释：过程性记忆要求 agent 作用域，因为它描述的是 agent 的行为流程，而不是普通用户事实。
         if agent_id is not None and memory_type == MemoryType.PROCEDURAL.value:
-            # 注释：计算并保存 结果集合，供后续逻辑使用。
+            # 逻辑注释：命中过程序记忆分支后直接生成并存储 procedural memory，不再走普通事实抽取流程。
             results = self._create_procedural_memory(messages, metadata=processed_metadata, prompt=prompt)
-            # 注释：返回 `results` 给调用方。
-            return results  # 直接返回，不走一般 conversation memory 流程
+            return results
 
-        # Step 5: 如果 LLM 支持视觉输入，则解析 vision 消息；否则做普通解析
+        # 逻辑注释：如果配置启用视觉能力，消息解析要保留/处理图像内容，让 LLM 能理解多模态输入。
         if self.config.llm.config.get("enable_vision"):
-            # 注释：计算并保存 消息列表，供后续逻辑使用。
+            # 逻辑注释：视觉消息先规范化为 LLM 可接收格式；未启用视觉时仍会做基础消息清洗。
             messages = parse_vision_messages(messages, self.llm, self.config.llm.config.get("vision_details"))
-        # 注释：处理前面条件不成立时的默认分支。
         else:
-            # 注释：计算并保存 消息列表，供后续逻辑使用。
+            # 逻辑注释：视觉消息先规范化为 LLM 可接收格式；未启用视觉时仍会做基础消息清洗。
             messages = parse_vision_messages(messages)
 
-        # Step 6: 调用核心函数 _add_to_vector_store()，完成 memory 抽取 / embed / persist / entity linking
+        # 逻辑注释：普通记忆最终交给向量写入流程处理，add 只负责入口校验和分流。
         vector_store_result = self._add_to_vector_store(messages, processed_metadata, effective_filters, infer, prompt=prompt)
-
-        # Step 7: 返回结构化结果，通常包含 {"results": [{id, memory, event:"ADD"}]}
+        # 逻辑注释：对外统一用 results 包一层，保持 add/search/get_all 等接口返回结构一致。
         return {"results": vector_store_result}
 
-    # 注释：将消息转换为记忆并写入向量存储。
+    # 逻辑注释：真正写入向量库的核心流程：raw 模式直接存，infer 模式走“检索旧记忆→LLM 抽取→去重→批量入库→实体链接”。
     def _add_to_vector_store(self, messages, metadata, filters, infer, prompt=None):
-        # Step 0: 判断是否启用 infer。
-        # infer=False 表示不让 LLM 抽取 memory，而是把原始 messages 直接作为 memory 存进去。
+        # 逻辑注释：关闭 infer 时不调用 LLM 抽取事实，而是把非 system 消息原样作为记忆写入。
         if not infer:
-            # Step 0.1: 用于收集最终返回的 memory 结果。
+            # 逻辑注释：收集本次成功写入的记忆，最后按 API 约定返回给调用方。
             returned_memories = []
-
-            # Step 0.2: 逐条处理输入 messages。
+            # 逻辑注释：raw 模式逐条处理消息，每条有效消息都会成为一条独立记忆。
             for message_dict in messages:
-                # Step 0.3: 校验每条 message 的格式。
-                # 要求必须是 dict，并且至少包含 role 和 content。
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if (
+                    # 逻辑注释：raw 模式仍要校验每条消息至少有 role/content，否则无法形成可解释的记忆记录。
                     not isinstance(message_dict, dict)
                     or message_dict.get("role") is None
                     or message_dict.get("content") is None
                 ):
-                    # 注释：输出警告日志。
+                    # 逻辑注释：单条消息格式错误只跳过并告警，不让一个坏消息导致整批写入失败。
                     logger.warning(f"Skipping invalid message format: {message_dict}")
-                    # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                     continue
 
-                # Step 0.4: system 消息不作为 memory 存储，直接跳过。
+                # 逻辑注释：system 消息通常是指令/上下文，不应作为用户事实或对话记忆存储。
                 if message_dict["role"] == "system":
-                    # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                     continue
 
-                # Step 0.5: 为当前 message 复制一份 metadata，避免修改外部传入的 metadata。
+                # 逻辑注释：每条消息复制一份 metadata，避免给其中一条消息加 role/actor 时影响其他消息。
                 per_msg_meta = deepcopy(metadata)
-
-                # Step 0.6: 把当前 message 的 role 写入 metadata。
-                # 例如 user / assistant。
+                # 逻辑注释：把原消息角色写入 metadata，后续读取/搜索时可以知道记忆来自 user 还是 assistant。
                 per_msg_meta["role"] = message_dict["role"]
 
-                # Step 0.7: 如果 message 里有 name 字段，则将其作为 actor_id。
+                # 逻辑注释：如果消息带 name，就把它作为 actor_id，支持多人/多角色对话里的说话人过滤。
                 actor_name = message_dict.get("name")
-                # 注释：判断条件 `actor_name` 是否成立。
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if actor_name:
-                    # 注释：计算并保存 per_msg_meta 变量，供后续逻辑使用。
+                    # 逻辑注释：actor_id 写入 metadata 后，后续可以按具体说话人查找或清理记忆。
                     per_msg_meta["actor_id"] = actor_name
 
-                # Step 0.8: 取出原始 message 内容。
+                # 逻辑注释：raw 模式把原始 content 当成记忆正文，不做 LLM 改写。
                 msg_content = message_dict["content"]
-
-                # Step 0.9: 对原始 message 内容做 embedding。
-                # 这里的 mode 是 "add"，表示用于新增 memory。
+                # 逻辑注释：写向量库前先把文本转成 embedding，后续语义搜索才能召回这条记忆。
                 msg_embeddings = self.embedding_model.embed(msg_content, "add")
-
-                # Step 0.10: 调用 _create_memory() 创建 memory。
-                # _create_memory 内部会把文本、embedding、metadata 写入 vector store，
-                # 并写入 SQL history。
+                # 逻辑注释：统一通过 _create_memory 写入向量库和历史表，避免 raw 模式遗漏审计记录。
                 mem_id = self._create_memory(msg_content, {msg_content: msg_embeddings}, per_msg_meta)
 
-                # Step 0.11: 组装返回结果。
+                # 逻辑注释：把对外需要的 id/memory/event/role 等信息记录下来，作为本次 add 的返回值。
                 returned_memories.append(
                     {
                         "id": mem_id,
@@ -991,38 +904,25 @@ class Memory(MemoryBase):
                         "role": message_dict["role"],
                     }
                 )
-
-            # Step 0.12: infer=False 的路径到这里结束，直接返回原始 messages 对应的 memories。
+            # 逻辑注释：返回本次实际新增的记忆列表，前面被跳过/去重的内容不会出现在结果里。
             return returned_memories
 
         # === V3 PHASED BATCH PIPELINE ===
 
-        # Step 1: infer=True 时，进入 V3 分阶段批处理 pipeline。
-        # 这个路径会使用 LLM 从对话里抽取 memory，而不是直接存原文。
-
         # Phase 0: Context gathering
-        # Step 1.1: 根据 filters 构造 session_scope。
-        # session_scope 用于 SQL DB 中读取/保存该 user_id / agent_id / run_id 对应的最近消息。
+        # 逻辑注释：把 filters 转成稳定会话 key，用来读取和保存最近消息上下文。
         session_scope = _build_session_scope(filters)
-
-        # Step 1.2: 从 SQL DB 中取最近 10 条消息。
-        # 这些历史消息会作为 LLM 抽取 memory 时的上下文。
+        # 逻辑注释：取最近对话作为 LLM 抽取记忆的上下文，帮助判断新信息是否真的值得写入。
         last_messages = self.db.get_last_messages(session_scope, limit=10)
-
-        # Step 1.3: 把 messages 转成适合 prompt 使用的文本格式。
+        # 逻辑注释：把 role/content 消息列表整理成 prompt 可读的文本，供 embedding 和 LLM 使用。
         parsed_messages = parse_messages(messages)
 
         # Phase 1: Existing memory retrieval
-        # Step 2.1: 从 filters 中提取 session 级别的过滤条件。
-        # 这里只保留 user_id / agent_id / run_id，保证只检索当前作用域下的旧 memory。
+        # 逻辑注释：实体检索只使用 session 级作用域字段，保证实体链接不会跨用户/agent/run 串数据。
         search_filters = {k: v for k, v in filters.items() if k in ("user_id", "agent_id", "run_id") and v}
-
-        # Step 2.2: 对当前新消息 parsed_messages 做 embedding。
-        # 注意这里 mode 是 "search"，因为这是为了检索已有 memory。
+        # 逻辑注释：用当前消息整体作为查询生成 embedding，先召回可能相关的旧记忆。
         query_embedding = self.embedding_model.embed(parsed_messages, "search")
-
-        # Step 2.3: 在 vector store 中检索和当前新消息最相关的旧 memories。
-        # 这里是 add() 内部的轻量 retrieve，只做一次语义向量搜索，top_k 固定为 10。
+        # 逻辑注释：检索旧记忆的目的是给 LLM 对照：新消息是新增事实、重复事实，还是应更新已有事实。
         existing_results = self.vector_store.search(
             query=parsed_messages,
             vectors=query_embedding,
@@ -1031,43 +931,31 @@ class Memory(MemoryBase):
         )
 
         # Map UUIDs to integers (anti-hallucination)
-        # Step 2.4: 把真实 UUID 映射成简单整数 id。
-        # 这样可以减少 LLM 在 prompt 中处理复杂 UUID 时产生幻觉的概率。
+        # 逻辑注释：只把必要的旧记忆文本传给 LLM，减少 prompt 体积和泄漏无关 payload 的风险。
         existing_memories = []
-        # 注释：初始化 uuid_mapping 变量 为空字典，用于后续按键保存数据。
+        # 逻辑注释：真实 UUID 不直接暴露给 LLM，而是映射成短编号，降低模型编造或误改 ID 的概率。
         uuid_mapping = {}
-
-        # Step 2.5: 遍历检索到的旧 memories。
+        # 逻辑注释：按召回顺序给旧记忆编号，后面 prompt 中使用这些短 ID 引用旧记忆。
         for idx, mem in enumerate(existing_results):
-            # Step 2.6: 记录整数 id 到真实 memory id 的映射。
+            # 逻辑注释：保存短编号到真实 UUID 的映射，必要时可以把 LLM 的引用还原成真实记忆 ID。
             uuid_mapping[str(idx)] = mem.id
-
-            # Step 2.7: 只把整数 id 和 memory 文本传给后续 prompt。
+            # 逻辑注释：构造给 LLM 的旧记忆摘要，只保留短 ID 和正文，避免 prompt 复杂化。
             existing_memories.append({"id": str(idx), "text": mem.payload.get("data", "")})
 
         # Phase 2: LLM extraction (single call)
-        # Step 3.1: 判断当前是否是纯 agent 作用域。
-        # 如果有 agent_id 且没有 user_id，则认为是 agent-scoped。
+        # 逻辑注释：只有 agent_id 且没有 user_id 时视为纯 agent 作用域，prompt 会额外强调 agent 语境。
         is_agent_scoped = bool(filters.get("agent_id")) and not filters.get("user_id")
-
-        # Step 3.2: 设置系统提示词，默认使用 ADDITIVE_EXTRACTION_PROMPT。
+        # 逻辑注释：使用增量抽取系统提示，目标是只抽取值得长期保存的新事实。
         system_prompt = ADDITIVE_EXTRACTION_PROMPT
-
-        # Step 3.3: 如果是 agent-scoped，则追加 agent 上下文提示。
+        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
         if is_agent_scoped:
-            # 注释：在原有 system_prompt 变量 基础上累加/追加新的内容。
+            # 逻辑注释：agent 作用域下追加语境后缀，让 LLM 按 agent 记忆而不是用户画像来理解对话。
             system_prompt += AGENT_CONTEXT_SUFFIX
 
-        # Step 3.4: 如果调用时传入了 prompt，则优先使用 prompt；
-        # 否则使用实例配置里的 custom_instructions。
+        # 逻辑注释：全局自定义指令会在 LLM 抽取记忆时作为默认额外要求。
         custom_instr = prompt or self.custom_instructions
 
-        # Step 3.5: 构造给 LLM 的用户提示词。
-        # 里面包含：
-        # - existing_memories：相关旧 memories
-        # - new_messages：当前新输入
-        # - last_k_messages：最近消息上下文
-        # - custom_instructions：自定义抽取指令
+        # 逻辑注释：把旧记忆、新消息、最近上下文和自定义规则合成一个用户 prompt，供 LLM 一次性判断。
         user_prompt = generate_additive_extraction_prompt(
             existing_memories=existing_memories,
             new_messages=parsed_messages,
@@ -1075,9 +963,8 @@ class Memory(MemoryBase):
             custom_instructions=custom_instr,
         )
 
-        # Step 3.6: 调用 LLM 做单次 memory extraction。
         try:
-            # 注释：计算并保存 模型响应，供后续逻辑使用。
+            # 逻辑注释：LLM 只调用一次并要求 JSON 输出，减少多轮抽取带来的延迟和不一致。
             response = self.llm.generate_response(
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -1085,191 +972,164 @@ class Memory(MemoryBase):
                 ],
                 response_format={"type": "json_object"},
             )
-        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
         except Exception as e:
-            # Step 3.7: 如果 LLM 调用失败，记录错误并返回空列表。
+            # 逻辑注释：抽取失败时记录错误并返回空结果，避免把未理解的文本错误写成记忆。
             logger.error(f"LLM extraction failed: {e}")
-            # 注释：返回 `[]` 给调用方。
+            # 逻辑注释：该分支没有产生可写入/可返回的记忆，返回空列表而不是报错。
             return []
 
         # Parse response
-        # Step 4.1: 解析 LLM 返回结果。
         try:
-            # Step 4.2: 移除 LLM 返回中可能包裹的 markdown code block。
+            # 逻辑注释：先去掉 ```json 这类代码块包裹，提升 json.loads 成功率。
             response = remove_code_blocks(response)
-
-            # Step 4.3: 如果 response 为空，则认为没有抽取到 memory。
+            # 逻辑注释：空响应说明 LLM 没有给出可解析内容，直接视为没有抽到记忆。
             if not response or not response.strip():
-                # 注释：初始化 extracted_memories 变量 为空列表，用于后续收集数据。
+                # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                 extracted_memories = []
-            # 注释：处理前面条件不成立时的默认分支。
             else:
-                # 注释：进入可能抛出异常的代码块。
                 try:
-                    # Step 4.4: 优先直接按 JSON 解析，并取出 memory 字段。
+                    # 逻辑注释：按约定读取 JSON 里的 memory 数组，后续每个元素应包含待写入文本。
                     extracted_memories = json.loads(response, strict=False).get("memory", [])
-                # 注释：捕获 json.JSONDecodeError 异常并执行降级或错误处理。
+                # 逻辑注释：LLM 有时不会返回严格 JSON；第一次解析失败后，再尝试从文本中抽取 JSON 片段。
                 except json.JSONDecodeError:
-                    # Step 4.5: 如果直接解析失败，则尝试从文本中提取 JSON 片段后再解析。
+                    # 逻辑注释：如果整段不是合法 JSON，就从文本里尽量截取 JSON 片段再解析。
                     extracted_json = extract_json(response)
-                    # 注释：计算并保存 extracted_memories 变量，供后续逻辑使用。
+                    # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                     extracted_memories = json.loads(extracted_json, strict=False).get("memory", [])
-        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
         except Exception as e:
-            # Step 4.6: 如果解析过程出错，记录错误，并认为没有抽取到 memories。
+            # 逻辑注释：解析错误只影响本次抽取结果，不让异常继续破坏调用方流程。
             logger.error(f"Error parsing extraction response: {e}")
-            # 注释：初始化 extracted_memories 变量 为空列表，用于后续收集数据。
+            # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
             extracted_memories = []
 
-        # Step 4.7: 如果 LLM 没有抽取出任何 memory，也要保存当前 messages 到 SQL DB。
-        # 这样后续 add() 仍然可以把它作为 rolling message window 的上下文。
+        # 逻辑注释：LLM 没抽到长期记忆时仍保存原消息上下文，方便下一次抽取时参考最近对话。
         if not extracted_memories:
             # Save messages even if nothing extracted
+            # 逻辑注释：保存原始消息到历史上下文库，后续 add 可以利用 last_messages 判断记忆变化。
             self.db.save_messages(messages, session_scope)
-            # 注释：返回 `[]` 给调用方。
+            # 逻辑注释：该分支没有产生可写入/可返回的记忆，返回空列表而不是报错。
             return []
 
         # Phase 3: Batch embed all extracted memory texts
-        # Step 5.1: 从 LLM 抽取结果中取出所有 memory text。
+        # 逻辑注释：只对非空文本生成 embedding；空文本不会成为记忆，也不浪费 embedding 调用。
         mem_texts = [m.get("text", "") for m in extracted_memories if m.get("text")]
-
-        # Step 5.2: 批量对 memory text 做 embedding。
         try:
-            # 注释：计算并保存 mem_embeddings_list 变量，供后续逻辑使用。
+            # 逻辑注释：批量 embedding 能减少 provider 调用次数，是批处理新增记忆的主要性能优化。
             mem_embeddings_list = self.embedding_model.embed_batch(mem_texts, "add")
-
-            # Step 5.3: 建立 text -> embedding 的映射，方便后续构造 records。
+            # 逻辑注释：把文本和 embedding 建成映射，后面构造记录时可以 O(1) 取向量。
             embed_map = dict(zip(mem_texts, mem_embeddings_list))
-        # 注释：捕获 Exception 异常并执行降级或错误处理。
+        # 逻辑注释：这里进入兜底路径，通常会从批量操作退化为逐条处理，提升整体成功率。
         except Exception:
             # Fallback: embed individually
-            # Step 5.4: 如果批量 embedding 失败，则降级为逐条 embedding。
+            # 逻辑注释：批量 embedding 失败后准备逐条兜底，尽量让部分可处理记忆仍能写入。
             embed_map = {}
-            # 注释：遍历 mem_texts 中的元素，并将当前项赋给 text。
+            # 逻辑注释：逐条 embedding 作为降级路径，牺牲性能换取更高的成功率。
             for text in mem_texts:
-                # 注释：进入可能抛出异常的代码块。
                 try:
-                    # 注释：计算并保存 embed_map 变量，供后续逻辑使用。
+                    # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                     embed_map[text] = self.embedding_model.embed(text, "add")
-                # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                 except Exception as e:
-                    # 注释：输出警告日志。
+                    # 逻辑注释：单条文本 embedding 失败只跳过该条，避免整批新增失败。
                     logger.warning(f"Failed to embed memory text: {e}")
 
         # Phase 4: Per-memory CPU processing + Phase 5: Hash dedup
         # Build set of existing hashes for dedup
-        # Step 6.1: 收集旧 memories 中已有的 hash，用于和新 memory 去重。
+        # 逻辑注释：收集旧记忆的内容哈希，后面用它快速判断是否已经存过完全相同的文本。
         existing_hashes = set()
-        # 注释：遍历 existing_results 中的元素，并将当前项赋给 mem。
+        # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
         for mem in existing_results:
-            # 注释：计算并保存 h 变量，供后续逻辑使用。
+            # 逻辑注释：旧记忆 payload 里的 hash 是去重依据，比直接比较所有文本更稳定高效。
             h = mem.payload.get("hash") if hasattr(mem, "payload") and mem.payload else None
-            # 注释：判断条件 `h` 是否成立。
+            # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
             if h:
-                # 注释：调用 existing_hashes.add 执行对应操作。
                 existing_hashes.add(h)
 
-        # Step 6.2: records 用于暂存待写入 vector store 的新 memory。
-        # 每条 record 格式为：(memory_id, text, embedding, payload)
+        # 逻辑注释：records 是批量写入的中间结构，集中保存 id、文本、向量和 payload。
         records = []  # (memory_id, text, embedding, payload)
-
-        # Step 6.3: seen_hashes 用于当前 batch 内部去重。
+        # 逻辑注释：本批次内部也要去重，避免 LLM 在一次响应里重复抽取同一事实。
         seen_hashes = set()  # dedup within the current batch
-
-        # Step 6.4: 遍历 LLM 抽取出来的每条 memory。
+        # 逻辑注释：逐条处理 LLM 抽取出的候选记忆，只有通过非空、可 embedding、非重复校验的才会入库。
         for mem in extracted_memories:
-            # Step 6.5: 取出 memory text。
+            # 逻辑注释：候选记忆以 text 字段为正文；缺失 text 的条目不具备可存储内容。
             text = mem.get("text")
-
-            # Step 6.6: 如果 text 为空，或者没有成功生成 embedding，则跳过。
+            # 逻辑注释：没有正文或没有成功生成 embedding 的候选都会被跳过，保证后面 records 完整可写。
             if not text or text not in embed_map:
-                # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                 continue
 
-            # Step 6.7: 对 memory text 计算 MD5 hash。
+            # 逻辑注释：使用文本 MD5 作为内容指纹，用于跨批次和批次内的精确重复检测。
             mem_hash = hashlib.md5(text.encode()).hexdigest()
-
-            # Step 6.8: 如果 hash 已存在于旧 memory 或当前 batch，则认为重复，跳过。
+            # 逻辑注释：如果内容哈希已经出现过，就说明是精确重复记忆，跳过以保持记忆库简洁。
             if mem_hash in existing_hashes or mem_hash in seen_hashes:
-                # 注释：输出调试日志。
                 logger.debug(f"Skipping duplicate memory (hash match): {text[:50]}")
-                # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                 continue
-
-            # Step 6.9: 记录当前 hash，避免本批次重复写入。
             seen_hashes.add(mem_hash)
 
-            # Step 6.10: 对文本做 lemmatization，供后续 keyword/BM25 检索使用。
+            # 逻辑注释：提前保存词形归一化文本，后续关键词检索无需每次重新处理存量记忆。
             text_lemmatized = lemmatize_for_bm25(text)
 
-            # Step 6.11: 为新 memory 生成唯一 ID。
+            # 逻辑注释：每条记忆用 UUID 作为向量库 ID，保证跨批次新增也不会冲突。
             memory_id = str(uuid.uuid4())
-
-            # Step 6.12: 构造 memory metadata。
+            # 逻辑注释：每条候选记忆都复制一份基础 metadata，再补充该记忆自己的 data/hash/time 等字段。
             mem_metadata = deepcopy(metadata)
-            # 注释：计算并保存 mem_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：记忆正文放入 payload 的 data 字段，读取和搜索结果格式化都从这里取文本。
             mem_metadata["data"] = text
-            # 注释：计算并保存 mem_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：把 BM25 用的归一化文本一起存进 payload，服务混合检索。
             mem_metadata["text_lemmatized"] = text_lemmatized
-            # 注释：计算并保存 mem_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：hash 存入 payload，后续新增时能用旧 hash 快速去重。
             mem_metadata["hash"] = mem_hash
-
-            # Step 6.13: 如果外部 metadata 没有 created_at，则使用当前 UTC 时间。
+            # 逻辑注释：调用方没有提供创建时间时，使用当前 UTC 时间作为记忆创建时间。
             if "created_at" not in mem_metadata:
-                # 注释：计算并保存 mem_metadata 变量，供后续逻辑使用。
+                # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                 mem_metadata["created_at"] = datetime.now(timezone.utc).isoformat()
-
-            # Step 6.14: 新增 memory 时，updated_at 初始等于 created_at。
+            # 逻辑注释：新增时更新时间等于创建时间，后续 update 才会改变 updated_at。
             mem_metadata["updated_at"] = mem_metadata["created_at"]
-
-            # Step 6.15: 如果 LLM 抽取结果包含 attributed_to，则写入 metadata。
+            # 逻辑注释：LLM 如果标出事实归属，就把 attributed_to 写入 payload，便于区分事实属于谁。
             if mem.get("attributed_to"):
-                # 注释：计算并保存 mem_metadata 变量，供后续逻辑使用。
+                # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                 mem_metadata["attributed_to"] = mem["attributed_to"]
 
-            # Step 6.16: 把新 memory 加入待持久化 records。
+            # 逻辑注释：通过 records 聚合写入所需的四元组，后续向量插入、历史记录、实体链接都复用它。
             records.append((memory_id, text, embed_map[text], mem_metadata))
 
-        # Step 6.17: 如果去重后没有任何新 memory，也保存 messages，然后返回空列表。
+        # 逻辑注释：所有候选都被过滤/去重后，只保存上下文消息，不向向量库写任何新记忆。
         if not records:
-            # 注释：把消息保存到本地历史数据库。
+            # 逻辑注释：保存原始消息到历史上下文库，后续 add 可以利用 last_messages 判断记忆变化。
             self.db.save_messages(messages, session_scope)
-            # 注释：返回 `[]` 给调用方。
+            # 逻辑注释：该分支没有产生可写入/可返回的记忆，返回空列表而不是报错。
             return []
 
         # Phase 6: Batch persist
-        # Step 7.1: 从 records 中拆出 vectors、ids、payloads，准备批量写入 vector store。
+        # 逻辑注释：从 records 拆出向量列表，供向量库批量 insert。
         all_vectors = [r[2] for r in records]
-        # 注释：计算并保存 all_ids 变量，供后续逻辑使用。
+        # 逻辑注释：从 records 拆出 ID 列表，和向量列表一一对应。
         all_ids = [r[0] for r in records]
-        # 注释：计算并保存 all_payloads 变量，供后续逻辑使用。
+        # 逻辑注释：从 records 拆出 payload 列表，写入后读取/过滤/关键词检索都依赖这些字段。
         all_payloads = [r[3] for r in records]
 
-        # Step 7.2: 批量写入 vector store。
         try:
-            # 注释：将向量和载荷写入向量库。
             self.vector_store.insert(
                 vectors=all_vectors,
                 ids=all_ids,
                 payloads=all_payloads,
             )
-        # 注释：捕获 Exception 异常并执行降级或错误处理。
+        # 逻辑注释：这里进入兜底路径，通常会从批量操作退化为逐条处理，提升整体成功率。
         except Exception:
             # Fallback: insert one by one
-            # Step 7.3: 如果批量写入失败，则降级为逐条写入。
+            # 逻辑注释：批量插入失败后逐条重试，让部分记忆仍有机会写入成功。
             for mid, vec, pay in zip(all_ids, all_vectors, all_payloads):
-                # 注释：进入可能抛出异常的代码块。
                 try:
-                    # 注释：将向量和载荷写入向量库。
+                    # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                     self.vector_store.insert(vectors=[vec], ids=[mid], payloads=[pay])
-                # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                 except Exception as e:
-                    # 注释：输出错误日志。
+                    # 逻辑注释：逐条插入失败才记录错误；这个错误只影响对应 memory_id。
                     logger.error(f"Failed to insert memory {mid}: {e}")
 
         # Batch history
-        # Step 7.4: 构造 SQL history 记录。
-        # 这里所有事件都是 ADD，因为这是 add-only extraction pipeline。
+        # 逻辑注释：为每条新增记忆准备历史记录，保证向量库写入后也有可审计的 ADD 事件。
         history_records = [
             {
                 "memory_id": r[0],
@@ -1279,109 +1139,89 @@ class Memory(MemoryBase):
                 "created_at": r[3].get("created_at"),
                 "is_deleted": 0,
             }
+            # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
             for r in records
         ]
-
-        # Step 7.5: 批量写入 SQL history。
         try:
-            # 注释：批量写入记忆变更历史。
+            # 逻辑注释：优先批量写历史，和批量插入一样减少数据库调用。
             self.db.batch_add_history(history_records)
-        # 注释：捕获 Exception 异常并执行降级或错误处理。
+        # 逻辑注释：这里进入兜底路径，通常会从批量操作退化为逐条处理，提升整体成功率。
         except Exception:
             # Fallback: add one by one
-            # Step 7.6: 如果批量写入 history 失败，则降级为逐条写入。
+            # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
             for hr in history_records:
-                # 注释：进入可能抛出异常的代码块。
                 try:
-                    # 注释：写入单条记忆变更历史。
+                    # 逻辑注释：批量写历史失败后逐条补写，避免完全丢失审计记录。
                     self.db.add_history(hr["memory_id"], None, hr["new_memory"], "ADD", created_at=hr.get("created_at"))
-                # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                 except Exception as e:
-                    # 注释：输出错误日志。
                     logger.error(f"Failed to add history for {hr['memory_id']}: {e}")
 
         # Phase 7: Batch entity linking
-        # Step 8.1: 开始批量实体链接。
-        # 这一步不是写 memory 本体，而是维护 entity -> memory_ids 的辅助索引。
         try:
-            # Step 8.2: 取出本批次所有新 memory 文本。
+            # 逻辑注释：实体抽取只需要记忆文本，因此从 records 中取出所有文本做批处理。
             all_texts = [r[1] for r in records]
-
-            # Step 8.3: 批量抽取实体。
+            # 逻辑注释：批量抽实体减少重复调用，后面用实体索引增强检索排序。
             all_entities = extract_entities_batch(all_texts)
 
             # 7a: Global dedup — collect unique entities across all memories
-            # Step 8.4: 对本批次所有实体做全局去重。
-            # key 是规范化后的 entity_text，value 包含 entity_type、entity_text、关联的 memory_ids。
+            # 逻辑注释：全局实体表把同批次重复实体合并，并记录它关联的所有 memory_id。
             global_entities = {}  # normalized_key -> (entity_type, entity_text, set of memory_ids)
-
-            # Step 8.5: 遍历每条新 memory 及其对应的实体列表。
+            # 逻辑注释：按 records 顺序把每条记忆和对应实体列表对齐，建立实体到记忆的关系。
             for idx, (memory_id, text, embedding, payload) in enumerate(records):
-                # 注释：计算并保存 entities 变量，供后续逻辑使用。
+                # 逻辑注释：如果批量抽取结果长度不完全匹配，就给缺失项空实体列表，避免越界。
                 entities = all_entities[idx] if idx < len(all_entities) else []
-
-                # Step 8.6: 遍历当前 memory 中抽取出的实体。
+                # 逻辑注释：逐个处理抽取出的实体，把每个实体都链接到当前记忆。
                 for entity_type, entity_text in entities:
-                    # Step 8.7: 用小写 + 去空格后的 entity_text 作为去重 key。
+                    # 逻辑注释：实体去重用小写+去空白后的规范 key，降低大小写和首尾空格带来的重复。
                     key = entity_text.strip().lower()
-
-                    # Step 8.8: 如果实体已经出现过，则把当前 memory_id 加入关联集合。
+                    # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                     if key in global_entities:
-                        # 注释：执行当前语句，推进该函数的业务流程。
+                        # 逻辑注释：同一实体已出现时只追加新的 memory_id，不重复保存实体文本。
                         global_entities[key][2].add(memory_id)
-                    # 注释：处理前面条件不成立时的默认分支。
                     else:
-                        # Step 8.9: 如果实体首次出现，则创建一条实体记录。
+                        # 逻辑注释：首次遇到实体时保存类型、原文和关联 memory_id 集合，后续用于批量查重/插入。
                         global_entities[key] = [entity_type, entity_text, {memory_id}]
 
-            # Step 8.10: 如果本批次存在实体，则继续处理实体 embedding 和 entity store 写入。
+            # 逻辑注释：只有抽到至少一个实体时才进入实体库流程，避免无意义的 embedding/search。
             if global_entities:
-                # Step 8.11: 固定实体顺序，方便 embedding 和 key 对齐。
+                # 逻辑注释：固定实体处理顺序，方便 entity_texts、embeddings 和后续结果按索引对齐。
                 ordered_keys = list(global_entities.keys())
-
-                # Step 8.12: 取出实体文本列表。
+                # 逻辑注释：只把实体原文送去 embedding，类型和关联记忆保留在 global_entities 里。
                 entity_texts = [global_entities[k][1] for k in ordered_keys]
 
                 # 7b: Single batch embed for all unique entities
-                # Step 8.13: 对所有唯一实体批量做 embedding。
                 try:
-                    # 注释：计算并保存 entity_embeddings 变量，供后续逻辑使用。
+                    # 逻辑注释：唯一实体批量 embedding，避免同一个实体在一批记忆中重复计算。
                     entity_embeddings = self.embedding_model.embed_batch(entity_texts, "add")
-                # 注释：捕获 Exception 异常并执行降级或错误处理。
+                # 逻辑注释：这里进入兜底路径，通常会从批量操作退化为逐条处理，提升整体成功率。
                 except Exception:
                     # Fallback: embed individually, use None for failures
-                    # Step 8.14: 如果批量实体 embedding 失败，则降级为逐条 embedding。
-                    # 失败的实体用 None 占位。
+                    # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                     entity_embeddings = []
-                    # 注释：遍历 entity_texts 中的元素，并将当前项赋给 t。
+                    # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
                     for t in entity_texts:
-                        # 注释：进入可能抛出异常的代码块。
                         try:
-                            # 注释：调用 entity_embeddings.append 执行对应操作。
                             entity_embeddings.append(self.embedding_model.embed(t, "add"))
-                        # 注释：捕获 Exception 异常并执行降级或错误处理。
+                        # 逻辑注释：这里进入兜底路径，通常会从批量操作退化为逐条处理，提升整体成功率。
                         except Exception:
-                            # 注释：调用 entity_embeddings.append 执行对应操作。
+                            # 逻辑注释：单个实体 embedding 失败时用 None 占位，保持索引对齐并在后面过滤掉。
                             entity_embeddings.append(None)
 
                 # Filter out entities with failed embeddings
-                # Step 8.15: 过滤掉 embedding 失败的实体。
+                # 逻辑注释：过滤掉 embedding 失败的实体，只对有向量的实体做实体库检索。
                 valid = [(i, k) for i, k in enumerate(ordered_keys) if entity_embeddings[i] is not None]
-
-                # Step 8.16: 如果存在有效实体，则继续查找 entity store 中是否已有类似实体。
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if valid:
-                    # 注释：为 `valid_indices, valid_keys` 赋值，准备后续处理所需的数据。
+                    # 逻辑注释：拆出有效实体的原始索引和 key，便于同时访问 embedding 和实体元数据。
                     valid_indices, valid_keys = zip(*valid)
-
-                    # Step 8.17: 取出有效实体对应的向量。
+                    # 逻辑注释：有效实体向量按 valid_keys 顺序排列，后续 search_batch 的返回也按这个顺序对齐。
                     valid_vectors = [entity_embeddings[i] for i in valid_indices]
 
                     # 7c: Batch search for existing entities
-                    # Step 8.18: 取出有效实体文本。
+                    # 逻辑注释：有效实体文本和向量一起传给批量搜索，用于判断实体是否已存在。
                     valid_texts = [global_entities[k][1] for k in valid_keys]
-
-                    # Step 8.19: 在 entity store 中批量搜索已有实体。
-                    # top_k=1 表示每个实体只找最相似的一个候选。
+                    # 逻辑注释：批量搜索已有实体，减少逐实体查询的网络/存储开销。
                     existing_matches = self.entity_store.search_batch(
                         queries=valid_texts,
                         vectors_list=valid_vectors,
@@ -1390,50 +1230,42 @@ class Memory(MemoryBase):
                     )
 
                     # 7d: Separate into inserts vs updates
-                    # Step 8.20: 准备收集需要新插入的实体。
+                    # 逻辑注释：把需要新建的实体先暂存在列表里，最后统一批量 insert。
                     to_insert_vectors, to_insert_ids, to_insert_payloads = [], [], []
-
-                    # Step 8.21: 遍历所有有效实体，判断是更新已有实体，还是插入新实体。
+                    # 逻辑注释：逐个有效实体根据搜索结果决定更新已有实体还是加入新建列表。
                     for j, key in enumerate(valid_keys):
-                        # 注释：为 `entity_type, entity_text, memory_ids` 赋值，准备后续处理所需的数据。
+                        # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                         entity_type, entity_text, memory_ids = global_entities[key]
-                        # 注释：计算并保存 matches 变量，供后续逻辑使用。
+                        # 逻辑注释：搜索结果按实体顺序对齐；缺失时按空列表处理，表示没有匹配实体。
                         matches = existing_matches[j] if j < len(existing_matches) else []
 
-                        # Step 8.22: 如果找到高度相似的已有实体，则更新它的 linked_memory_ids。
+                        # 逻辑注释：高度相似才认为是同一实体，避免实体索引过度合并。
                         if matches and matches[0].score >= 0.95:
                             # Update existing entity
+                            # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                             match = matches[0]
-                            # 注释：计算并保存 向量库载荷数据，供后续逻辑使用。
                             payload = match.payload or {}
-
-                            # Step 8.23: 取出已有 linked_memory_ids，并合并当前 memory_ids。
+                            # 逻辑注释：用 set 合并已有链接和本批新链接，天然去重。
                             linked = set(payload.get("linked_memory_ids", []))
-                            # 注释：计算并保存 linked 变量，供后续逻辑使用。
+                            # 逻辑注释：把本批中关联该实体的所有 memory_id 合并进已有实体链接。
                             linked |= memory_ids
-                            # 注释：计算并保存 向量库载荷数据，供后续逻辑使用。
+                            # 逻辑注释：排序后写回 payload，让结果稳定，也便于调试比较。
                             payload["linked_memory_ids"] = sorted(linked)
-
-                            # Step 8.24: 更新 entity store 中已有实体的 payload。
                             try:
-                                # 注释：调用 self.entity_store.update 执行对应操作。
                                 self.entity_store.update(
                                     vector_id=match.id,
                                     vector=None,
                                     payload=payload,
                                 )
-                            # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                            # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                             except Exception as e:
-                                # 注释：输出调试日志。
                                 logger.debug(f"Entity update failed for '{entity_text}': {e}")
-                        # 注释：处理前面条件不成立时的默认分支。
                         else:
                             # New entity — collect for batch insert
-                            # Step 8.25: 如果没有匹配到已有实体，则准备插入新实体。
+                            # 逻辑注释：没有匹配实体时，把该实体加入待插入集合，稍后统一写入。
                             to_insert_vectors.append(valid_vectors[j])
-                            # 注释：调用 to_insert_ids.append 执行对应操作。
                             to_insert_ids.append(str(uuid.uuid4()))
-                            # 注释：调用 to_insert_payloads.append 执行对应操作。
+                            # 逻辑注释：新实体 payload 带上实体信息、关联记忆和 session filters，支持后续增强检索和清理。
                             to_insert_payloads.append({
                                 "data": entity_text,
                                 "entity_type": entity_type,
@@ -1442,49 +1274,47 @@ class Memory(MemoryBase):
                             })
 
                     # 7e: Single batch insert for all new entities
-                    # Step 8.26: 如果存在新实体，则批量写入 entity store。
+                    # 逻辑注释：只有存在新实体时才调用 insert，避免空批次触发某些向量库异常。
                     if to_insert_vectors:
-                        # 注释：进入可能抛出异常的代码块。
                         try:
-                            # 注释：调用 self.entity_store.insert 执行对应操作。
+                            # 逻辑注释：把新实体向量和 payload 写入实体库，建立实体索引。
                             self.entity_store.insert(
                                 vectors=to_insert_vectors,
                                 ids=to_insert_ids,
                                 payloads=to_insert_payloads,
                             )
-                        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                         except Exception as e:
-                            # 注释：输出警告日志。
+                            # 逻辑注释：批量实体插入失败不影响已写入的记忆，只记录警告供排查。
                             logger.warning(f"Batch entity insert failed: {e}")
-        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
         except Exception as e:
-            # Step 8.27: entity linking 失败不影响主 memory 写入流程。
+            # 逻辑注释：实体链接属于增强能力，失败时不回滚主记忆写入。
             logger.warning(f"Batch entity linking failed: {e}")
 
         # Phase 8: Save messages + return
-        # Step 9.1: 把当前 messages 保存到 SQL DB 的 rolling message window。
+        # 逻辑注释：保存原始消息到历史上下文库，后续 add 可以利用 last_messages 判断记忆变化。
         self.db.save_messages(messages, session_scope)
 
-        # Step 9.2: 构造最终返回结果。
         returned_memories = [
             {"id": r[0], "memory": r[1], "event": "ADD"}
+            # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
             for r in records
         ]
 
-        # Step 9.3: 处理 telemetry filters，用于埋点上报。
+        # 逻辑注释：遥测前对 filters 做脱敏/编码，只上报维度信息而不是原始实体 ID。
         keys, encoded_ids = process_telemetry_filters(filters)
-
-        # Step 9.4: 记录 mem0.add telemetry 事件。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event(
             "mem0.add",
             self,
+            # 逻辑注释：保存 API 版本，遥测事件会带上它，便于区分不同版本的行为。
             {"version": self.api_version, "keys": keys, "encoded_ids": encoded_ids, "sync_type": "sync"},
         )
-
-        # Step 9.5: 返回本次新增的 memories。
+        # 逻辑注释：返回本次实际新增的记忆列表，前面被跳过/去重的内容不会出现在结果里。
         return returned_memories
 
-    # 注释：按 ID 读取单条记忆。
+    # 逻辑注释：按 memory_id 读取单条记忆，并把系统字段和自定义 metadata 整理成对外稳定的返回结构。
     def get(self, memory_id):
         """
         Retrieve a memory by ID.
@@ -1495,16 +1325,16 @@ class Memory(MemoryBase):
         Returns:
             dict: Retrieved memory.
         """
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event("mem0.get", self, {"memory_id": memory_id, "sync_type": "sync"})
-        # 注释：计算并保存 记忆内容，供后续逻辑使用。
+        # 逻辑注释：通过向量库 ID 直接取 payload，这是 get/update/delete 的基础读取路径。
         memory = self.vector_store.get(vector_id=memory_id)
-        # 注释：判断条件 `not memory` 是否成立。
+        # 逻辑注释：向量库没有返回记录时表示 memory_id 不存在，get 用 None 表达未找到。
         if not memory:
-            # 注释：返回 `None` 给调用方。
+            # 逻辑注释：没有可用结果时显式返回 None，让调用方能区分“没找到”和异常。
             return None
 
-        # 注释：计算并保存 需要提升到返回顶层的载荷字段，供后续逻辑使用。
+        # 逻辑注释：这些 payload 字段是常用作用域/来源信息，返回时提升到顶层，调用方读取更方便。
         promoted_payload_keys = [
             "user_id",
             "agent_id",
@@ -1513,10 +1343,10 @@ class Memory(MemoryBase):
             "role",
         ]
 
-        # 注释：计算并保存 核心字段和已提升字段集合，供后续逻辑使用。
+        # 逻辑注释：核心字段和已提升字段不再放进 metadata，避免结果里重复出现同一信息。
         core_and_promoted_keys = {"data", "hash", "created_at", "updated_at", "id", "text_lemmatized", "attributed_to", *promoted_payload_keys}
 
-        # 注释：计算并保存 result_item 变量，供后续逻辑使用。
+        # 逻辑注释：用 MemoryItem 统一字段名和序列化形态，屏蔽不同向量库返回对象的差异。
         result_item = MemoryItem(
             id=memory.id,
             memory=memory.payload.get("data", ""),
@@ -1525,24 +1355,24 @@ class Memory(MemoryBase):
             updated_at=memory.payload.get("updated_at"),
         ).model_dump()
 
-        # 注释：遍历 promoted_payload_keys 中的元素，并将当前项赋给 key。
+        # 逻辑注释：遍历可提升字段，只有 payload 里真的存在时才加入返回结果。
         for key in promoted_payload_keys:
-            # 注释：判断条件 `key in memory.payload` 是否成立。
+            # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
             if key in memory.payload:
-                # 注释：计算并保存 result_item 变量，供后续逻辑使用。
+                # 逻辑注释：把作用域/角色字段放到结果顶层，方便用户直接过滤或展示。
                 result_item[key] = memory.payload[key]
 
-        # 注释：计算并保存 额外元数据，供后续逻辑使用。
+        # 逻辑注释：除系统字段外的 payload 都视为用户自定义 metadata，保留在 metadata 子对象里。
         additional_metadata = {k: v for k, v in memory.payload.items() if k not in core_and_promoted_keys}
-        # 注释：判断条件 `additional_metadata` 是否成立。
+        # 逻辑注释：只有存在额外 metadata 时才添加 metadata 字段，保持返回结构简洁。
         if additional_metadata:
-            # 注释：计算并保存 result_item 变量，供后续逻辑使用。
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             result_item["metadata"] = additional_metadata
 
-        # 注释：返回 `result_item` 给调用方。
+        # 逻辑注释：返回已经格式化过的结果，调用方无需理解向量库原始 payload 结构。
         return result_item
 
-    # 注释：按照过滤条件列出记忆。
+    # 逻辑注释：列出某个作用域下的记忆；先校验 filters/top_k，再委托向量库 list 并格式化结果。
     def get_all(
         self,
         *,
@@ -1568,80 +1398,86 @@ class Memory(MemoryBase):
                 or if top_k is invalid.
         """
         # Reject top-level entity params - must use filters instead
+        # 逻辑注释：兼容性层面拒绝 user_id 等顶层参数，统一要求调用方通过 filters 指定作用域。
         _reject_top_level_entity_params(kwargs, "get_all")
 
         # Validate top_k
+        # 逻辑注释：在触达向量库前校验 top_k/threshold，错误更早、更清晰。
         _validate_search_params(top_k=top_k)
 
         # Validate and trim entity IDs in filters
+        # 逻辑注释：复制 filters 后再修改，避免 trim 或高级过滤转换影响调用方原对象。
         effective_filters = dict(filters) if filters else {}
-        # 注释：判断条件 `"user_id" in effective_filters` 是否成立。
+        # 逻辑注释：如果 filters 里包含实体 ID，就先做同样的清洗校验，保证查询作用域格式正确。
         if "user_id" in effective_filters:
-            # 注释：计算并保存 规范化后的过滤条件，供后续逻辑使用。
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             effective_filters["user_id"] = _validate_and_trim_entity_id(
                 effective_filters["user_id"], "user_id"
             )
-        # 注释：判断条件 `"agent_id" in effective_filters` 是否成立。
+        # 逻辑注释：如果 filters 里包含实体 ID，就先做同样的清洗校验，保证查询作用域格式正确。
         if "agent_id" in effective_filters:
-            # 注释：计算并保存 规范化后的过滤条件，供后续逻辑使用。
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             effective_filters["agent_id"] = _validate_and_trim_entity_id(
                 effective_filters["agent_id"], "agent_id"
             )
-        # 注释：判断条件 `"run_id" in effective_filters` 是否成立。
+        # 逻辑注释：如果 filters 里包含实体 ID，就先做同样的清洗校验，保证查询作用域格式正确。
         if "run_id" in effective_filters:
-            # 注释：计算并保存 规范化后的过滤条件，供后续逻辑使用。
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             effective_filters["run_id"] = _validate_and_trim_entity_id(
                 effective_filters["run_id"], "run_id"
             )
 
         # Validate filters contains at least one entity ID
+        # 逻辑注释：读取/搜索必须至少限定一个实体作用域，防止默认扫描整个记忆库。
         if not any(key in effective_filters for key in ("user_id", "agent_id", "run_id")):
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError(
                 "filters must contain at least one of: user_id, agent_id, run_id. "
+                # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
                 "Example: filters={'user_id': 'u1'}"
             )
 
-        # 注释：计算并保存 limit 变量，供后续逻辑使用。
+        # 逻辑注释：内部统一用 limit 表示最终返回条数，和向量库参数命名保持一致。
         limit = top_k
 
-        # 注释：为 `keys, encoded_ids` 赋值，准备后续处理所需的数据。
+        # 逻辑注释：遥测前对 filters 做脱敏/编码，只上报维度信息而不是原始实体 ID。
         keys, encoded_ids = process_telemetry_filters(effective_filters)
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event(
             "mem0.get_all", self, {"limit": limit, "keys": keys, "encoded_ids": encoded_ids, "sync_type": "sync"}
         )
 
-        # 注释：计算并保存 all_memories_result 变量，供后续逻辑使用。
+        # 逻辑注释：实际 list 和格式化下沉到 helper，get_all 本身只处理校验和返回包装。
         all_memories_result = self._get_all_from_vector_store(effective_filters, limit)
 
-        # 注释：返回 `{"results": all_memories_result}` 给调用方。
+        # 逻辑注释：对外统一用 results 包一层，保持 add/search/get_all 等接口返回结构一致。
         return {"results": all_memories_result}
 
-    # 注释：从向量库中读取并格式化多条记忆。
+    # 逻辑注释：兼容不同向量库 list 返回结构，统一展开为 MemoryItem 列表，同时保留额外 metadata。
     def _get_all_from_vector_store(self, filters, limit):
-        # 注释：计算并保存 memories_result 变量，供后续逻辑使用。
+        # 逻辑注释：按 filters 从向量库列出记忆，top_k/limit 控制最多返回多少条。
         memories_result = self.vector_store.list(filters=filters, top_k=limit)
 
         # Handle different vector store return formats by inspecting first element
+        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
         if isinstance(memories_result, (tuple, list)) and len(memories_result) > 0:
-            # 注释：计算并保存 first_element 变量，供后续逻辑使用。
+            # 逻辑注释：检查第一个元素的类型，用来判断向量库返回的是嵌套列表还是扁平列表。
             first_element = memories_result[0]
 
             # If first element is a container, unwrap one level
+            # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
             if isinstance(first_element, (list, tuple)):
-                # 注释：计算并保存 actual_memories 变量，供后续逻辑使用。
+                # 逻辑注释：如果第一层包了一层列表，就展开一层得到真正的记忆对象列表。
                 actual_memories = first_element
-            # 注释：处理前面条件不成立时的默认分支。
             else:
                 # First element is a memory object, structure is already flat
+                # 逻辑注释：如果返回已经是扁平结构，就直接使用，不做额外变换。
                 actual_memories = memories_result
-        # 注释：处理前面条件不成立时的默认分支。
         else:
-            # 注释：计算并保存 actual_memories 变量，供后续逻辑使用。
+            # 逻辑注释：如果返回已经是扁平结构，就直接使用，不做额外变换。
             actual_memories = memories_result
 
-        # 注释：计算并保存 需要提升到返回顶层的载荷字段，供后续逻辑使用。
+        # 逻辑注释：这些 payload 字段是常用作用域/来源信息，返回时提升到顶层，调用方读取更方便。
         promoted_payload_keys = [
             "user_id",
             "agent_id",
@@ -1649,43 +1485,43 @@ class Memory(MemoryBase):
             "actor_id",
             "role",
         ]
-        # 注释：计算并保存 核心字段和已提升字段集合，供后续逻辑使用。
+        # 逻辑注释：核心字段和已提升字段不再放进 metadata，避免结果里重复出现同一信息。
         core_and_promoted_keys = {"data", "hash", "created_at", "updated_at", "id", "text_lemmatized", "attributed_to", *promoted_payload_keys}
 
-        # 注释：初始化 formatted_memories 变量 为空列表，用于后续收集数据。
+        # 逻辑注释：统一把向量库对象转换成 SDK 对外返回的字典列表。
         formatted_memories = []
-        # 注释：遍历 actual_memories 中的元素，并将当前项赋给 mem。
+        # 逻辑注释：逐条格式化记忆对象，处理字段提升和额外 metadata。
         for mem in actual_memories:
-            # 注释：计算并保存 格式化后的记忆字典，供后续逻辑使用。
+            # 逻辑注释：用 MemoryItem 统一字段名和序列化形态，屏蔽不同向量库返回对象的差异。
             memory_item_dict = MemoryItem(
                 id=mem.id,
                 memory=mem.payload.get("data", ""),
                 hash=mem.payload.get("hash"),
                 created_at=mem.payload.get("created_at"),
                 updated_at=mem.payload.get("updated_at"),
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             ).model_dump(exclude={"score"})
 
-            # 注释：遍历 promoted_payload_keys 中的元素，并将当前项赋给 key。
+            # 逻辑注释：遍历可提升字段，只有 payload 里真的存在时才加入返回结果。
             for key in promoted_payload_keys:
-                # 注释：判断条件 `key in mem.payload` 是否成立。
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if key in mem.payload:
-                    # 注释：计算并保存 格式化后的记忆字典，供后续逻辑使用。
+                    # 逻辑注释：把作用域/角色字段放到结果顶层，方便用户直接过滤或展示。
                     memory_item_dict[key] = mem.payload[key]
 
-            # 注释：计算并保存 额外元数据，供后续逻辑使用。
+            # 逻辑注释：除系统字段外的 payload 都视为用户自定义 metadata，保留在 metadata 子对象里。
             additional_metadata = {k: v for k, v in mem.payload.items() if k not in core_and_promoted_keys}
-            # 注释：判断条件 `additional_metadata` 是否成立。
+            # 逻辑注释：只有存在额外 metadata 时才添加 metadata 字段，保持返回结构简洁。
             if additional_metadata:
-                # 注释：计算并保存 格式化后的记忆字典，供后续逻辑使用。
+                # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
                 memory_item_dict["metadata"] = additional_metadata
 
-            # 注释：调用 formatted_memories.append 执行对应操作。
             formatted_memories.append(memory_item_dict)
 
-        # 注释：返回 `formatted_memories` 给调用方。
+        # 逻辑注释：返回已经格式化过的结果，调用方无需理解向量库原始 payload 结构。
         return formatted_memories
 
-    # 注释：根据查询文本搜索相关记忆。
+    # 逻辑注释：搜索入口负责校验和预处理 filters，再调用混合检索；可选 rerank 会在初排结果上二次排序。
     def search(
         self,
         query: str,
@@ -1734,67 +1570,74 @@ class Memory(MemoryBase):
                 or if threshold/top_k values are invalid.
         """
         # Reject top-level entity params - must use filters instead
+        # 逻辑注释：兼容性层面拒绝 user_id 等顶层参数，统一要求调用方通过 filters 指定作用域。
         _reject_top_level_entity_params(kwargs, "search")
 
         # Validate search parameters (before applying defaults)
+        # 逻辑注释：在触达向量库前校验 top_k/threshold，错误更早、更清晰。
         _validate_search_params(threshold=threshold, top_k=top_k)
 
         # Validate and trim entity IDs in filters
+        # 逻辑注释：复制 filters 后再修改，避免 trim 或高级过滤转换影响调用方原对象。
         effective_filters = filters.copy() if filters else {}
-        # 注释：判断条件 `"user_id" in effective_filters` 是否成立。
+        # 逻辑注释：如果 filters 里包含实体 ID，就先做同样的清洗校验，保证查询作用域格式正确。
         if "user_id" in effective_filters:
-            # 注释：计算并保存 规范化后的过滤条件，供后续逻辑使用。
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             effective_filters["user_id"] = _validate_and_trim_entity_id(
                 effective_filters["user_id"], "user_id"
             )
-        # 注释：判断条件 `"agent_id" in effective_filters` 是否成立。
+        # 逻辑注释：如果 filters 里包含实体 ID，就先做同样的清洗校验，保证查询作用域格式正确。
         if "agent_id" in effective_filters:
-            # 注释：计算并保存 规范化后的过滤条件，供后续逻辑使用。
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             effective_filters["agent_id"] = _validate_and_trim_entity_id(
                 effective_filters["agent_id"], "agent_id"
             )
-        # 注释：判断条件 `"run_id" in effective_filters` 是否成立。
+        # 逻辑注释：如果 filters 里包含实体 ID，就先做同样的清洗校验，保证查询作用域格式正确。
         if "run_id" in effective_filters:
-            # 注释：计算并保存 规范化后的过滤条件，供后续逻辑使用。
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             effective_filters["run_id"] = _validate_and_trim_entity_id(
                 effective_filters["run_id"], "run_id"
             )
-        # 注释：判断条件 `not any(key in effective_filters for key in ("user_id", "agent_id", "run_id"))` 是否成立。
+        # 逻辑注释：读取/搜索必须至少限定一个实体作用域，防止默认扫描整个记忆库。
         if not any(key in effective_filters for key in ("user_id", "agent_id", "run_id")):
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError(
                 "filters must contain at least one of: user_id, agent_id, run_id. "
+                # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
                 "Example: filters={'user_id': 'u1'}"
             )
 
-        # 注释：计算并保存 limit 变量，供后续逻辑使用。
+        # 逻辑注释：内部统一用 limit 表示最终返回条数，和向量库参数命名保持一致。
         limit = top_k
 
         # Apply enhanced metadata filtering if advanced operators are detected
+        # 逻辑注释：检测到高级过滤语法时先转换成向量库兼容格式，否则简单 filters 直接透传。
         if self._has_advanced_operators(effective_filters):
-            # 注释：计算并保存 处理后的过滤条件，供后续逻辑使用。
+            # 逻辑注释：把 AND/OR/NOT、比较操作符等高级语义转换成内部统一表达。
             processed_filters = self._process_metadata_filters(effective_filters)
             # Remove logical/operator keys that have been reprocessed
+            # 逻辑注释：转换后移除原始逻辑操作符，避免同一个条件被同时以新旧两种格式传给向量库。
             for logical_key in ("AND", "OR", "NOT"):
-                # 注释：调用 effective_filters.pop 执行对应操作。
+                # 逻辑注释：已被转换的复杂字段从原 filters 删除，保持最终 filters 只有向量库能理解的结构。
                 effective_filters.pop(logical_key, None)
-            # 注释：遍历 list(effective_filters.keys()) 中的元素，并将当前项赋给 fk。
+            # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
             for fk in list(effective_filters.keys()):
-                # 注释：判断条件 `fk not in ("AND", "OR", "NOT", "user_id", "agent_id", "run_id") and isinstanc...` 是否成立。
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if fk not in ("AND", "OR", "NOT", "user_id", "agent_id", "run_id") and isinstance(effective_filters.get(fk), dict):
-                    # 注释：调用 effective_filters.pop 执行对应操作。
+                    # 逻辑注释：已被转换的复杂字段从原 filters 删除，保持最终 filters 只有向量库能理解的结构。
                     effective_filters.pop(fk, None)
-            # 注释：调用 effective_filters.update 执行对应操作。
+            # 逻辑注释：把转换后的高级过滤条件合并回有效 filters，后续检索统一使用这份结果。
             effective_filters.update(processed_filters)
 
-        # 注释：为 `keys, encoded_ids` 赋值，准备后续处理所需的数据。
+        # 逻辑注释：遥测前对 filters 做脱敏/编码，只上报维度信息而不是原始实体 ID。
         keys, encoded_ids = process_telemetry_filters(effective_filters)
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event(
             "mem0.search",
             self,
             {
                 "limit": limit,
+                # 逻辑注释：保存 API 版本，遥测事件会带上它，便于区分不同版本的行为。
                 "version": self.api_version,
                 "keys": keys,
                 "encoded_ids": encoded_ids,
@@ -1804,26 +1647,26 @@ class Memory(MemoryBase):
             },
         )
 
-        # 注释：计算并保存 original_memories 变量，供后续逻辑使用。
+        # 逻辑注释：底层搜索会完成语义、关键词、实体增强的融合排序，search 入口只负责调用。
         original_memories = self._search_vector_store(query, effective_filters, limit, threshold)
 
         # Apply reranking if enabled and reranker is available
+        # 逻辑注释：只有用户开启 rerank、实例也配置了 reranker 且已有初排结果时才做二次排序。
         if rerank and self.reranker and original_memories:
-            # 注释：进入可能抛出异常的代码块。
             try:
-                # 注释：计算并保存 reranked_memories 变量，供后续逻辑使用。
+                # 逻辑注释：reranker 根据原始 query 对候选记忆重新排序，通常能提升相关性但会增加成本。
                 reranked_memories = self.reranker.rerank(query, original_memories, limit)
-                # 注释：计算并保存 original_memories 变量，供后续逻辑使用。
+                # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
                 original_memories = reranked_memories
-            # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+            # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
             except Exception as e:
-                # 注释：输出警告日志。
+                # 逻辑注释：重排失败不影响搜索可用性，直接退回初排结果。
                 logger.warning(f"Reranking failed, using original results: {e}")
 
-        # 注释：返回 `{"results": original_memories}` 给调用方。
+        # 逻辑注释：对外统一用 results 包一层，保持 add/search/get_all 等接口返回结构一致。
         return {"results": original_memories}
 
-    # 注释：处理高级元数据过滤表达式。
+    # 逻辑注释：把平台层的增强过滤语法转换成向量库更容易消费的格式，并支持 AND/OR/NOT 组合。
     def _process_metadata_filters(self, metadata_filters: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process enhanced metadata filters and convert them to vector store compatible format.
@@ -1834,115 +1677,107 @@ class Memory(MemoryBase):
         Returns:
             Dict of processed filters compatible with vector store
         """
-        # 注释：初始化 处理后的过滤条件 为空字典，用于后续按键保存数据。
+        # 逻辑注释：转换结果单独累积，最后再替换/合并到有效 filters 里。
         processed_filters = {}
 
-        # 注释：定义 process_condition 函数/方法，封装一段可复用逻辑。
+        # 逻辑注释：定义 process_condition，封装这段业务逻辑，减少外部调用方理解内部细节的成本。
         def process_condition(key: str, condition: Any) -> Dict[str, Any]:
-            # 注释：判断条件 `not isinstance(condition, dict)` 是否成立。
+            # 逻辑注释：非 dict 条件代表简单等值匹配，是最常见、最直接的过滤形式。
             if not isinstance(condition, dict):
                 # Simple equality: {"key": "value"}
+                # 逻辑注释：星号表示通配字段，具体如何匹配由底层向量库适配层处理。
                 if condition == "*":
                     # Wildcard: match everything for this field (implementation depends on vector store)
                     return {key: "*"}
-                # 注释：返回 `{key: condition}` 给调用方。
                 return {key: condition}
 
-            # 注释：初始化 result 变量 为空字典，用于后续按键保存数据。
             result = {}
-            # 注释：遍历 condition.items() 中的元素，并将当前项赋给 operator, value。
+            # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
             for operator, value in condition.items():
                 # Map platform operators to universal format that can be translated by each vector store
+                # 逻辑注释：建立平台操作符到内部操作符的映射，当前两边同名，但保留了适配空间。
                 operator_map = {
                     "eq": "eq", "ne": "ne", "gt": "gt", "gte": "gte",
                     "lt": "lt", "lte": "lte", "in": "in", "nin": "nin",
                     "contains": "contains", "icontains": "icontains"
                 }
 
-                # 注释：判断条件 `operator in operator_map` 是否成立。
+                # 逻辑注释：只允许白名单里的操作符，避免未知过滤语法被静默传到向量库。
                 if operator in operator_map:
-                    # 注释：调用 result.setdefault 执行对应操作。
+                    # 逻辑注释：同一个字段可能有多个比较条件，用嵌套 dict 合并到同一字段下。
                     result.setdefault(key, {})[operator_map[operator]] = value
-                # 注释：处理前面条件不成立时的默认分支。
                 else:
-                    # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+                    # 逻辑注释：遇到不支持的操作符立即报错，避免用户以为过滤生效但实际被忽略。
                     raise ValueError(f"Unsupported metadata filter operator: {operator}")
-            # 注释：返回 `result` 给调用方。
             return result
 
-        # 注释：定义 merge_filters 函数/方法，封装一段可复用逻辑。
+        # 逻辑注释：定义 merge_filters，封装这段业务逻辑，减少外部调用方理解内部细节的成本。
         def merge_filters(target: Dict[str, Any], source: Dict[str, Any]) -> None:
             """Merge source into target, deep-merging nested operator dicts for the same key."""
-            # 注释：遍历 source.items() 中的元素，并将当前项赋给 key, value。
+            # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
             for key, value in source.items():
-                # 注释：判断条件 `key in target and isinstance(target[key], dict) and isinstance(value, dict)` 是否成立。
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if key in target and isinstance(target[key], dict) and isinstance(value, dict):
-                    # 注释：执行当前语句，推进该函数的业务流程。
+                    # 逻辑注释：同一个字段的多个操作符合并到一起，例如 gte 和 lte 可以同时存在。
                     target[key].update(value)
-                # 注释：处理前面条件不成立时的默认分支。
                 else:
-                    # 注释：计算并保存 target 变量，供后续逻辑使用。
+                    # 逻辑注释：字段不存在或不是同类嵌套结构时，直接写入目标 filters。
                     target[key] = value
 
-        # 注释：遍历 metadata_filters.items() 中的元素，并将当前项赋给 key, value。
+        # 逻辑注释：逐个处理原始 filters 条目，普通字段和逻辑操作符分开转换。
         for key, value in metadata_filters.items():
-            # 注释：判断条件 `key == "AND"` 是否成立。
+            # 逻辑注释：AND 语义是所有子条件同时成立，所以可以直接合并到同一个 filters 对象里。
             if key == "AND":
                 # Logical AND: combine multiple conditions
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if not isinstance(value, list):
-                    # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+                    # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
                     raise ValueError("AND operator requires a list of conditions")
-                # 注释：遍历 value 中的元素，并将当前项赋给 condition。
+                # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
                 for condition in value:
-                    # 注释：遍历 condition.items() 中的元素，并将当前项赋给 sub_key, sub_value。
                     for sub_key, sub_value in condition.items():
-                        # 注释：调用 merge_filters 执行对应操作。
                         merge_filters(processed_filters, process_condition(sub_key, sub_value))
-            # 注释：当前一个条件不成立时，继续判断 `key == "OR"`。
+            # 逻辑注释：这是对前面判断的补充分支，用来兼容另一种输入/配置形态。
             elif key == "OR":
                 # Logical OR: Pass through to vector store for implementation-specific handling
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if not isinstance(value, list) or not value:
-                    # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+                    # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
                     raise ValueError("OR operator requires a non-empty list of conditions")
                 # Store OR conditions in a way that vector stores can interpret
+                # 逻辑注释：$or 保存多个备选条件，每个条件内部仍按普通字段规则转换。
                 processed_filters["$or"] = []
-                # 注释：遍历 value 中的元素，并将当前项赋给 condition。
+                # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
                 for condition in value:
-                    # 注释：初始化 or_condition 变量 为空字典，用于后续按键保存数据。
                     or_condition = {}
-                    # 注释：遍历 condition.items() 中的元素，并将当前项赋给 sub_key, sub_value。
+                    # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
                     for sub_key, sub_value in condition.items():
-                        # 注释：调用 merge_filters 执行对应操作。
                         merge_filters(or_condition, process_condition(sub_key, sub_value))
-                    # 注释：执行当前语句，推进该函数的业务流程。
+                    # 逻辑注释：$or 保存多个备选条件，每个条件内部仍按普通字段规则转换。
                     processed_filters["$or"].append(or_condition)
-            # 注释：当前一个条件不成立时，继续判断 `key == "NOT"`。
+            # 逻辑注释：这是对前面判断的补充分支，用来兼容另一种输入/配置形态。
             elif key == "NOT":
                 # Logical NOT: Pass through to vector store for implementation-specific handling
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if not isinstance(value, list) or not value:
-                    # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+                    # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
                     raise ValueError("NOT operator requires a non-empty list of conditions")
-                # 注释：初始化 处理后的过滤条件 为空列表，用于后续收集数据。
+                # 逻辑注释：$not 保存需要排除的条件集合，交给底层适配层处理。
                 processed_filters["$not"] = []
-                # 注释：遍历 value 中的元素，并将当前项赋给 condition。
+                # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
                 for condition in value:
-                    # 注释：初始化 not_condition 变量 为空字典，用于后续按键保存数据。
                     not_condition = {}
-                    # 注释：遍历 condition.items() 中的元素，并将当前项赋给 sub_key, sub_value。
+                    # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
                     for sub_key, sub_value in condition.items():
-                        # 注释：调用 merge_filters 执行对应操作。
                         merge_filters(not_condition, process_condition(sub_key, sub_value))
-                    # 注释：执行当前语句，推进该函数的业务流程。
+                    # 逻辑注释：$not 保存需要排除的条件集合，交给底层适配层处理。
                     processed_filters["$not"].append(not_condition)
-            # 注释：处理前面条件不成立时的默认分支。
             else:
-                # 注释：调用 merge_filters 执行对应操作。
                 merge_filters(processed_filters, process_condition(key, value))
 
-        # 注释：返回 `processed_filters` 给调用方。
         return processed_filters
 
-    # 注释：判断过滤条件中是否包含高级操作符。
+    # 逻辑注释：轻量判断 filters 是否包含高级操作符，用来决定是否需要进入转换流程。
     def _has_advanced_operators(self, filters: Dict[str, Any]) -> bool:
         """
         Check if filters contain advanced operators that need special processing.
@@ -1953,97 +1788,104 @@ class Memory(MemoryBase):
         Returns:
             bool: True if advanced operators are detected
         """
-        # 注释：判断条件 `not isinstance(filters, dict)` 是否成立。
+        # 逻辑注释：非 dict filters 不可能包含高级过滤语法，直接返回 False。
         if not isinstance(filters, dict):
-            # 注释：返回 `False` 给调用方。
             return False
             
-        # 注释：遍历 filters.items() 中的元素，并将当前项赋给 key, value。
+        # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
         for key, value in filters.items():
             # Check for platform-style logical operators
+            # 逻辑注释：出现逻辑操作符就说明需要高级过滤转换。
             if key in ["AND", "OR", "NOT"]:
-                # 注释：返回 `True` 给调用方。
                 return True
             # Check for comparison operators (without $ prefix for universal compatibility)
+            # 逻辑注释：字段值是 dict 时可能包含 eq/gt/in 等比较操作符，需要继续检查。
             if isinstance(value, dict):
-                # 注释：遍历 value.keys() 中的元素，并将当前项赋给 op。
+                # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
                 for op in value.keys():
-                    # 注释：判断条件 `op in ["eq", "ne", "gt", "gte", "lt", "lte", "in", "nin", "contains", "iconta...` 是否成立。
+                    # 逻辑注释：命中任意比较/包含操作符，就判定 filters 使用了高级语法。
                     if op in ["eq", "ne", "gt", "gte", "lt", "lte", "in", "nin", "contains", "icontains"]:
-                        # 注释：返回 `True` 给调用方。
                         return True
             # Check for wildcard values
+            # 逻辑注释：通配符也属于增强过滤语义，需要走转换逻辑。
             if value == "*":
-                # 注释：返回 `True` 给调用方。
                 return True
-        # 注释：返回 `False` 给调用方。
         return False
 
-    # 注释：执行向量检索、关键词检索和综合排序。
+    # 逻辑注释：底层混合检索：语义向量召回、关键词 BM25、实体增强一起打分，再统一排序和格式化。
     def _search_vector_store(self, query, filters, limit, threshold=0.1):
         # Guard against None threshold (backward compat)
+        # 逻辑注释：兼容旧调用可能传 None 的情况，统一回落到默认阈值 0.1。
         if threshold is None:
-            # 注释：计算并保存 相似度阈值，供后续逻辑使用。
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             threshold = 0.1
 
         # Step 1: Preprocess query
+        # 逻辑注释：查询文本也做词形归一化，保证和写入时保存的 text_lemmatized 在同一空间比较。
         query_lemmatized = lemmatize_for_bm25(query)
-        # 注释：计算并保存 query_entities 变量，供后续逻辑使用。
+        # 逻辑注释：从查询中抽实体，后面可以通过实体库给相关记忆额外加分。
         query_entities = extract_entities(query)
 
         # Step 2: Embed query
+        # 逻辑注释：查询向量用于语义召回，能找到表述不同但含义相近的记忆。
         embeddings = self.embedding_model.embed(query, "search")
 
         # Step 3: Semantic search (over-fetch for scoring pool)
+        # 逻辑注释：先多召回一些候选，再融合 BM25/实体分数排序，避免早期截断错过好结果。
         internal_limit = max(limit * 4, 60)
-        # 注释：计算并保存 semantic_results 变量，供后续逻辑使用。
+        # 逻辑注释：语义检索提供候选池的主体，filters 保证只查当前作用域内的记忆。
         semantic_results = self.vector_store.search(
             query=query, vectors=embeddings, top_k=internal_limit, filters=filters
         )
 
         # Step 4: Keyword search (if store supports it)
+        # 逻辑注释：如果向量库支持关键词检索，就额外召回词面匹配强的结果，用于混合排序。
         keyword_results = self.vector_store.keyword_search(
             query=query_lemmatized, top_k=internal_limit, filters=filters
         )
 
         # Step 5: Compute BM25 scores from keyword results
+        # 逻辑注释：BM25 分数单独按 memory_id 保存，后面和语义分数融合。
         bm25_scores = {}
-        # 注释：判断条件 `keyword_results is not None` 是否成立。
+        # 逻辑注释：有些向量库可能不支持 keyword_search；None 表示跳过关键词分支。
         if keyword_results is not None:
-            # 注释：为 `midpoint, steepness` 赋值，准备后续处理所需的数据。
+            # 逻辑注释：根据查询长度/形态选择归一化参数，把 BM25 原始分数压到可融合区间。
             midpoint, steepness = get_bm25_params(query, lemmatized=query_lemmatized)
-            # 注释：遍历 keyword_results 中的元素，并将当前项赋给 mem。
+            # 逻辑注释：逐条读取关键词检索结果，将不同返回对象格式统一成 memory_id 和 raw_score。
             for mem in keyword_results:
-                # 注释：计算并保存 mem_id 变量，供后续逻辑使用。
+                # 逻辑注释：兼容对象式和 dict 式结果，统一转成字符串 ID 作为打分 key。
                 mem_id = str(mem.id) if hasattr(mem, 'id') else str(mem.get('id', ''))
-                # 注释：计算并保存 raw_score 变量，供后续逻辑使用。
+                # 逻辑注释：同样兼容对象式/dict 式 score 字段，避免绑定某一种向量库返回类型。
                 raw_score = mem.score if hasattr(mem, 'score') else mem.get('score', 0)
-                # 注释：判断条件 `raw_score and raw_score > 0` 是否成立。
+                # 逻辑注释：只有正向关键词匹配分才参与融合，零分或空值不会影响排序。
                 if raw_score and raw_score > 0:
-                    # 注释：计算并保存 bm25_scores 变量，供后续逻辑使用。
+                    # 逻辑注释：把 BM25 原始分归一化，和语义/实体分数处在可比较尺度上。
                     bm25_scores[mem_id] = normalize_bm25(raw_score, midpoint, steepness)
 
         # Step 6: Compute entity boosts
+        # 逻辑注释：实体增强默认为空；没有抽到查询实体时，最终排序不会受到实体分支影响。
         entity_boosts = {}
-        # 注释：判断条件 `query_entities` 是否成立。
+        # 逻辑注释：只有查询里有实体时才访问实体库，减少普通搜索的额外开销。
         if query_entities:
-            # 注释：计算并保存 entity_boosts 变量，供后续逻辑使用。
+            # 逻辑注释：实体增强会把命中实体关联的记忆额外加分，让精确实体相关结果更靠前。
             entity_boosts = self._compute_entity_boosts(query_entities, filters)
 
         # Step 7: Build candidate set from semantic results
+        # 逻辑注释：把语义召回结果转换成统一候选结构，供 score_and_rank 融合排序。
         candidates = []
-        # 注释：遍历 semantic_results 中的元素，并将当前项赋给 mem。
+        # 逻辑注释：遍历语义候选，保留 id、语义分和 payload，后续格式化也依赖 payload。
         for mem in semantic_results:
-            # 注释：计算并保存 mem_id 变量，供后续逻辑使用。
+            # 逻辑注释：兼容对象式和 dict 式结果，统一转成字符串 ID 作为打分 key。
             mem_id = str(mem.id)
-            # 注释：调用 candidates.append 执行对应操作。
             candidates.append({
                 "id": mem_id,
                 "score": mem.score,
+                # 逻辑注释：payload 里包含记忆正文、metadata、hash 等返回所需信息。
                 "payload": mem.payload if hasattr(mem, 'payload') else {},
             })
 
         # Step 8: Score and rank
+        # 逻辑注释：统一融合语义分、BM25 分和实体 boost，并按阈值/top_k 截断。
         scored_results = score_and_rank(
             semantic_results=candidates,
             bm25_scores=bm25_scores,
@@ -2053,6 +1895,7 @@ class Memory(MemoryBase):
         )
 
         # Step 9: Format results
+        # 逻辑注释：这些 payload 字段是常用作用域/来源信息，返回时提升到顶层，调用方读取更方便。
         promoted_payload_keys = [
             "user_id",
             "agent_id",
@@ -2060,22 +1903,22 @@ class Memory(MemoryBase):
             "actor_id",
             "role",
         ]
-        # 注释：计算并保存 核心字段和已提升字段集合，供后续逻辑使用。
+        # 逻辑注释：核心字段和已提升字段不再放进 metadata，避免结果里重复出现同一信息。
         core_and_promoted_keys = {"data", "hash", "created_at", "updated_at", "id", "text_lemmatized", "attributed_to", *promoted_payload_keys}
 
-        # 注释：初始化 original_memories 变量 为空列表，用于后续收集数据。
+        # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
         original_memories = []
-        # 注释：遍历 scored_results 中的元素，并将当前项赋给 scored。
+        # 逻辑注释：只格式化融合排序后的最终结果，而不是所有召回候选。
         for scored in scored_results:
-            # 注释：计算并保存 向量库载荷数据，供后续逻辑使用。
+            # 逻辑注释：从候选中安全取 payload；缺失时用空 dict 防止字段访问异常。
             payload = scored.get("payload") or {}
 
-            # 注释：判断条件 `not payload.get("data")` 是否成立。
+            # 逻辑注释：没有 data 的候选不是有效记忆文本，跳过避免返回空 memory。
             if not payload.get("data"):
-                # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
+                # 逻辑注释：当前项不满足处理条件，跳过它并继续处理下一项，保证整批流程不中断。
                 continue  # Skip candidates with no payload data
 
-            # 注释：计算并保存 格式化后的记忆字典，供后续逻辑使用。
+            # 逻辑注释：用 MemoryItem 统一字段名和序列化形态，屏蔽不同向量库返回对象的差异。
             memory_item_dict = MemoryItem(
                 id=scored["id"],
                 memory=payload.get("data", ""),
@@ -2085,31 +1928,30 @@ class Memory(MemoryBase):
                 score=scored["score"],
             ).model_dump()
 
-            # 注释：遍历 promoted_payload_keys 中的元素，并将当前项赋给 key。
+            # 逻辑注释：遍历可提升字段，只有 payload 里真的存在时才加入返回结果。
             for key in promoted_payload_keys:
-                # 注释：判断条件 `key in payload` 是否成立。
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if key in payload:
-                    # 注释：计算并保存 格式化后的记忆字典，供后续逻辑使用。
+                    # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
                     memory_item_dict[key] = payload[key]
 
-            # 注释：计算并保存 额外元数据，供后续逻辑使用。
+            # 逻辑注释：除系统字段外的 payload 都视为用户自定义 metadata，保留在 metadata 子对象里。
             additional_metadata = {k: v for k, v in payload.items() if k not in core_and_promoted_keys}
-            # 注释：判断条件 `additional_metadata` 是否成立。
+            # 逻辑注释：只有存在额外 metadata 时才添加 metadata 字段，保持返回结构简洁。
             if additional_metadata:
-                # 注释：判断条件 `not memory_item_dict.get("metadata")` 是否成立。
+                # 逻辑注释：向量库没有返回记录时表示 memory_id 不存在，get 用 None 表达未找到。
                 if not memory_item_dict.get("metadata"):
-                    # 注释：初始化 格式化后的记忆字典 为空字典，用于后续按键保存数据。
+                    # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
                     memory_item_dict["metadata"] = {}
-                # 注释：执行当前语句，推进该函数的业务流程。
+                # 逻辑注释：把额外 metadata 合并到结果对象，既保留系统字段，又不丢调用方自定义字段。
                 memory_item_dict["metadata"].update(additional_metadata)
 
-            # 注释：调用 original_memories.append 执行对应操作。
             original_memories.append(memory_item_dict)
 
-        # 注释：返回 `original_memories` 给调用方。
+        # 逻辑注释：返回已经格式化过的结果，调用方无需理解向量库原始 payload 结构。
         return original_memories
 
-    # 注释：根据实体匹配结果计算记忆加权分数。
+    # 逻辑注释：根据查询实体去实体库找相关记忆，并给命中的 memory_id 加权，提升实体精确匹配的排序位置。
     def _compute_entity_boosts(self, query_entities, filters):
         """Compute per-memory entity boosts from entity store search.
 
@@ -2122,37 +1964,36 @@ class Memory(MemoryBase):
             Dict mapping memory_id (str) -> max entity boost [0, 0.5].
         """
         # Deduplicate entities (max 8)
+        # 逻辑注释：用集合在单条文本内去重，避免同一个实体重复 upsert。
         seen = set()
-        # 注释：初始化 deduped 变量 为空列表，用于后续收集数据。
+        # 逻辑注释：实体增强前先准备去重后的实体列表，避免重复查询同一实体。
         deduped = []
-        # 注释：遍历 query_entities[ 中的元素，并将当前项赋给 entity_type, entity_text。
+        # 逻辑注释：最多处理前 8 个实体，防止复杂查询触发过多实体库查询。
         for entity_type, entity_text in query_entities[:8]:
-            # 注释：计算并保存 key 变量，供后续逻辑使用。
+            # 逻辑注释：实体去重用小写+去空白后的规范 key，降低大小写和首尾空格带来的重复。
             key = entity_text.strip().lower()
-            # 注释：判断条件 `key and key not in seen` 是否成立。
+            # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
             if key and key not in seen:
-                # 注释：调用 seen.add 执行对应操作。
                 seen.add(key)
-                # 注释：调用 deduped.append 执行对应操作。
+                # 逻辑注释：只把非空且未见过的实体加入待查询列表。
                 deduped.append((entity_type, entity_text))
 
-        # 注释：判断条件 `not deduped` 是否成立。
+        # 逻辑注释：去重后没有实体时无需访问实体库，直接返回空 boost。
         if not deduped:
-            # 注释：返回 `{}` 给调用方。
+            # 逻辑注释：没有实体增强可用时返回空映射，后续融合打分自然退化为普通检索。
             return {}
 
-        # 注释：计算并保存 检索过滤条件，供后续逻辑使用。
+        # 逻辑注释：实体检索只使用 session 级作用域字段，保证实体链接不会跨用户/agent/run 串数据。
         search_filters = {k: v for k, v in filters.items() if k in ("user_id", "agent_id", "run_id") and v}
-        # 注释：初始化 memory_boosts 变量 为空字典，用于后续按键保存数据。
+        # 逻辑注释：最终按 memory_id 保存 boost，多个实体命中同一记忆时取最大值。
         memory_boosts = {}
 
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：遍历 deduped 中的元素，并将当前项赋给 _, entity_text。
+            # 逻辑注释：逐个查询实体库，每个实体都可能为一批关联记忆提供加分。
             for _, entity_text in deduped:
-                # 注释：计算并保存 实体向量，供后续逻辑使用。
+                # 逻辑注释：实体也需要单独向量化，才能在实体库里用相似度判断是否已有同一实体。
                 entity_embedding = self.embedding_model.embed(entity_text, "search")
-                # 注释：计算并保存 matches 变量，供后续逻辑使用。
+                # 逻辑注释：在实体库中找和查询实体相近的实体节点，再通过 linked_memory_ids 找到关联记忆。
                 matches = self.entity_store.search(
                     query=entity_text,
                     vectors=entity_embedding,
@@ -2160,49 +2001,44 @@ class Memory(MemoryBase):
                     filters=search_filters,
                 )
 
-                # 注释：遍历 matches 中的元素，并将当前项赋给 match。
+                # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
                 for match in matches:
-                    # 注释：计算并保存 similarity 变量，供后续逻辑使用。
                     similarity = match.score if hasattr(match, 'score') else 0.0
-                    # 注释：判断条件 `similarity < 0.5` 是否成立。
+                    # 逻辑注释：实体匹配太弱时不加分，避免噪声实体影响搜索排序。
                     if similarity < 0.5:
-                        # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                         continue
 
-                    # 注释：计算并保存 向量库载荷数据，供后续逻辑使用。
                     payload = match.payload if hasattr(match, 'payload') else {}
-                    # 注释：计算并保存 关联记忆 ID 列表，供后续逻辑使用。
+                    # 逻辑注释：实体节点的反向链接列表告诉我们哪些记忆与该实体有关。
                     linked_memory_ids = payload.get("linked_memory_ids", [])
-                    # 注释：判断条件 `not isinstance(linked_memory_ids, list)` 是否成立。
+                    # 逻辑注释：链接字段异常时跳过该实体，避免坏 payload 影响搜索。
                     if not isinstance(linked_memory_ids, list):
-                        # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                         continue
 
                     # Spread-attenuated boost: entities linking to many memories get attenuated
+                    # 逻辑注释：实体关联的记忆越多，越可能是泛化实体，需要降低单条记忆的 boost。
                     num_linked = max(len(linked_memory_ids), 1)
-                    # 注释：计算并保存 memory_count_weight 变量，供后续逻辑使用。
+                    # 逻辑注释：用扩散衰减权重抑制“高频实体”造成的过度加分。
                     memory_count_weight = 1.0 / (1.0 + 0.001 * ((num_linked - 1) ** 2))
-                    # 注释：计算并保存 boost 变量，供后续逻辑使用。
+                    # 逻辑注释：最终实体 boost 同时考虑实体相似度、全局权重和扩散衰减。
                     boost = similarity * ENTITY_BOOST_WEIGHT * memory_count_weight
 
-                    # 注释：遍历 linked_memory_ids 中的元素，并将当前项赋给 memory_id。
+                    # 逻辑注释：把同一实体带来的 boost 分发到它关联的每条记忆上。
                     for memory_id in linked_memory_ids:
-                        # 注释：判断条件 `memory_id` 是否成立。
+                        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                         if memory_id:
-                            # 注释：计算并保存 memory_key 变量，供后续逻辑使用。
                             memory_key = str(memory_id)
-                            # 注释：计算并保存 memory_boosts 变量，供后续逻辑使用。
+                            # 逻辑注释：同一记忆被多个实体命中时取最大 boost，避免简单累加导致多实体查询过度放大。
                             memory_boosts[memory_key] = max(memory_boosts.get(memory_key, 0.0), boost)
 
-        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
         except Exception as e:
-            # 注释：输出警告日志。
+            # 逻辑注释：实体增强失败时保留普通混合检索结果，搜索功能不中断。
             logger.warning(f"Entity boost computation failed: {e}")
 
-        # 注释：返回 `memory_boosts` 给调用方。
         return memory_boosts
 
-    # 注释：更新指定 ID 的记忆内容。
+    # 逻辑注释：更新入口先生成新文本 embedding，再交给内部方法处理向量、metadata、历史和实体索引同步。
     def update(self, memory_id, data, metadata: Optional[Dict[str, Any]] = None):
         """
         Update a memory by ID.
@@ -2219,18 +2055,17 @@ class Memory(MemoryBase):
             >>> m.update(memory_id="mem_123", data="Likes to play tennis on weekends")
             {'message': 'Memory updated successfully!'}
         """
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event("mem0.update", self, {"memory_id": memory_id, "sync_type": "sync"})
 
-        # 注释：计算并保存 existing_embeddings 变量，供后续逻辑使用。
+        # 逻辑注释：提前计算新文本 embedding，并用 dict 传给内部更新方法，避免重复计算。
         existing_embeddings = {data: self.embedding_model.embed(data, "update")}
 
-        # 注释：调用 self._update_memory 执行对应操作。
+        # 逻辑注释：内部更新方法负责真正修改向量库、写历史并同步实体索引。
         self._update_memory(memory_id, data, existing_embeddings, metadata)
-        # 注释：返回 `{"message": "Memory updated successfully!"}` 给调用方。
         return {"message": "Memory updated successfully!"}
 
-    # 注释：删除指定 ID 的记忆。
+    # 逻辑注释：删除入口先确认 memory_id 存在，再删除向量记录并写入删除历史。
     def delete(self, memory_id):
         """
         Delete a memory by ID.
@@ -2238,22 +2073,21 @@ class Memory(MemoryBase):
         Args:
             memory_id (str): ID of the memory to delete.
         """
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event("mem0.delete", self, {"memory_id": memory_id, "sync_type": "sync"})
 
-        # 注释：计算并保存 existing_memory 变量，供后续逻辑使用。
+        # 逻辑注释：通过向量库 ID 直接取 payload，这是 get/update/delete 的基础读取路径。
         existing_memory = self.vector_store.get(vector_id=memory_id)
-        # 注释：判断条件 `existing_memory is None` 是否成立。
+        # 逻辑注释：找不到旧记忆时不能继续更新/删除，必须向调用方报告无效 memory_id。
         if existing_memory is None:
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError(f"Memory with id {memory_id} not found")
 
-        # 注释：调用 self._delete_memory 执行对应操作。
+        # 逻辑注释：内部删除方法统一处理向量库删除、历史记录和实体索引清理。
         self._delete_memory(memory_id, existing_memory)
-        # 注释：返回 `{"message": "Memory deleted successfully!"}` 给调用方。
         return {"message": "Memory deleted successfully!"}
 
-    # 注释：按用户、代理或运行 ID 批量删除记忆。
+    # 逻辑注释：按作用域批量删除记忆；要求至少一个实体过滤条件，避免误删整个库。
     def delete_all(self, user_id: Optional[str] = None, agent_id: Optional[str] = None, run_id: Optional[str] = None):
         """
         Delete all memories.
@@ -2263,46 +2097,42 @@ class Memory(MemoryBase):
             agent_id (str, optional): ID of the agent to delete memories for. Defaults to None.
             run_id (str, optional): ID of the run to delete memories for. Defaults to None.
         """
-        # 注释：为 `filters: Dict[str, Any]` 赋值，准备后续处理所需的数据。
         filters: Dict[str, Any] = {}
-        # 注释：判断条件 `user_id` 是否成立。
+        # 逻辑注释：有 user_id 时同时写入 metadata 和 filters，新增记忆和查询旧记忆会落在同一个用户作用域。
         if user_id:
-            # 注释：计算并保存 过滤条件，供后续逻辑使用。
             filters["user_id"] = user_id
-        # 注释：判断条件 `agent_id` 是否成立。
+        # 逻辑注释：agent_id 也参与存储和过滤，支持按 agent 维度隔离记忆。
         if agent_id:
-            # 注释：计算并保存 过滤条件，供后续逻辑使用。
             filters["agent_id"] = agent_id
-        # 注释：判断条件 `run_id` 是否成立。
+        # 逻辑注释：run_id 用于一次运行/会话级别的隔离，适合临时任务或批处理场景。
         if run_id:
-            # 注释：计算并保存 过滤条件，供后续逻辑使用。
             filters["run_id"] = run_id
 
-        # 注释：判断条件 `not filters` 是否成立。
+        # 逻辑注释：没有任何过滤条件时拒绝批量删除，避免误删所有记忆；全量清空必须显式调用 reset。
         if not filters:
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError(
                 "At least one filter is required to delete all memories. If you want to delete all memories, use the `reset()` method."
             )
 
-        # 注释：为 `keys, encoded_ids` 赋值，准备后续处理所需的数据。
+        # 逻辑注释：遥测前对 filters 做脱敏/编码，只上报维度信息而不是原始实体 ID。
         keys, encoded_ids = process_telemetry_filters(filters)
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event("mem0.delete_all", self, {"keys": keys, "encoded_ids": encoded_ids, "sync_type": "sync"})
         # delete all vector memories and reset the collections
+        # 逻辑注释：先列出当前作用域下所有记忆，再逐条走统一删除逻辑，确保历史和实体清理不遗漏。
         memories = self.vector_store.list(filters=filters)[0]
-        # 注释：遍历 memories 中的元素，并将当前项赋给 memory。
+        # 逻辑注释：逐条删除可以复用 _delete_memory 的审计和实体清理流程。
         for memory in memories:
-            # 注释：调用 self._delete_memory 执行对应操作。
+            # 逻辑注释：内部删除方法统一处理向量库删除、历史记录和实体索引清理。
             self._delete_memory(memory.id)
 
-        # 注释：输出信息日志。
+        # 逻辑注释：批量删除结束后记录删除数量，便于排查 filters 是否符合预期。
         logger.info(f"Deleted {len(memories)} memories")
 
-        # 注释：返回 `{"message": "Memories deleted successfully!"}` 给调用方。
         return {"message": "Memories deleted successfully!"}
 
-    # 注释：读取指定记忆的变更历史。
+    # 逻辑注释：读取某条记忆的变更历史，方便审计 ADD/UPDATE/DELETE 过程。
     def history(self, memory_id):
         """
         Get the history of changes for a memory by ID.
@@ -2313,47 +2143,43 @@ class Memory(MemoryBase):
         Returns:
             list: List of changes for the memory.
         """
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event("mem0.history", self, {"memory_id": memory_id, "sync_type": "sync"})
-        # 注释：返回 `self.db.get_history(memory_id)` 给调用方。
+        # 逻辑注释：返回 memory_id 让上层可以继续记录、链接实体或给用户展示操作结果。
         return self.db.get_history(memory_id)
 
-    # 注释：创建一条新记忆并写入向量库和历史表。
+    # 逻辑注释：创建单条记忆的通用 helper：生成 ID、补齐 metadata/hash/time、写向量库并记录历史。
     def _create_memory(self, data, existing_embeddings, metadata=None):
-        # 注释：输出调试日志。
+        # 逻辑注释：创建前打 debug 日志，调试时可看到即将写入的记忆正文。
         logger.debug(f"Creating memory with {data=}")
-        # 注释：判断条件 `data in existing_embeddings` 是否成立。
+        # 逻辑注释：如果上层已传入新文本 embedding，就直接复用，避免二次 embedding 调用。
         if data in existing_embeddings:
-            # 注释：计算并保存 向量表示，供后续逻辑使用。
+            # 逻辑注释：复用调用方已经计算好的 embedding，减少重复计算和 provider 成本。
             embeddings = existing_embeddings[data]
-        # 注释：处理前面条件不成立时的默认分支。
         else:
-            # 注释：计算并保存 向量表示，供后续逻辑使用。
+            # 逻辑注释：查询向量用于语义召回，能找到表述不同但含义相近的记忆。
             embeddings = self.embedding_model.embed(data, memory_action="add")
-        # 注释：计算并保存 记忆 ID，供后续逻辑使用。
+        # 逻辑注释：每条记忆用 UUID 作为向量库 ID，保证跨批次新增也不会冲突。
         memory_id = str(uuid.uuid4())
-        # 注释：深拷贝生成 new_metadata 变量，避免修改原始输入对象。
+        # 逻辑注释：更新时先从调用方新 metadata 开始，再补齐系统字段和旧作用域字段。
         new_metadata = deepcopy(metadata) if metadata is not None else {}
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+        # 逻辑注释：更新后的正文写回 data 字段，读取和搜索都会看到新文本。
         new_metadata["data"] = data
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+        # 逻辑注释：更新后重新计算内容 hash，保证后续去重依据和新文本一致。
         new_metadata["hash"] = hashlib.md5(data.encode()).hexdigest()
-        # 注释：判断条件 `"created_at" not in new_metadata` 是否成立。
+        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
         if "created_at" not in new_metadata:
-            # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
             new_metadata["created_at"] = datetime.now(timezone.utc).isoformat()
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
         new_metadata["updated_at"] = new_metadata["created_at"]
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+        # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
         new_metadata["text_lemmatized"] = lemmatize_for_bm25(data)
 
-        # 注释：将向量和载荷写入向量库。
         self.vector_store.insert(
             vectors=[embeddings],
             ids=[memory_id],
             payloads=[new_metadata],
         )
-        # 注释：写入单条记忆变更历史。
         self.db.add_history(
             memory_id,
             None,
@@ -2364,10 +2190,10 @@ class Memory(MemoryBase):
             actor_id=new_metadata.get("actor_id"),
             role=new_metadata.get("role"),
         )
-        # 注释：返回 `memory_id` 给调用方。
+        # 逻辑注释：返回 memory_id 让上层可以继续记录、链接实体或给用户展示操作结果。
         return memory_id
 
-    # 注释：创建程序性记忆。
+    # 逻辑注释：把一段对话压缩成“过程性记忆”再存储，适合记录 agent 的长期操作流程。
     def _create_procedural_memory(self, messages, metadata=None, prompt=None):
         """
         Create a procedural memory
@@ -2377,10 +2203,10 @@ class Memory(MemoryBase):
             metadata (dict): Metadata to create a procedural memory from.
             prompt (str, optional): Prompt to use for the procedural memory creation. Defaults to None.
         """
-        # 注释：输出信息日志。
+        # 逻辑注释：过程性记忆生成前记录日志，因为它会调用 LLM 做总结，成本和普通写入不同。
         logger.info("Creating procedural memory")
 
-        # 注释：计算并保存 parsed_messages 变量，供后续逻辑使用。
+        # 逻辑注释：构造用于过程性记忆的消息序列：系统提示、原对话、最后的总结指令。
         parsed_messages = [
             {"role": "system", "content": prompt or PROCEDURAL_MEMORY_SYSTEM_PROMPT},
             *messages,
@@ -2390,117 +2216,110 @@ class Memory(MemoryBase):
             },
         ]
 
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：计算并保存 procedural_memory 变量，供后续逻辑使用。
+            # 逻辑注释：调用 LLM 把整段对话总结成可长期保存的流程/操作记忆。
             procedural_memory = self.llm.generate_response(messages=parsed_messages)
-            # 注释：计算并保存 procedural_memory 变量，供后续逻辑使用。
+            # 逻辑注释：去掉 LLM 可能包上的代码块标记，存储时只保留纯文本记忆。
             procedural_memory = remove_code_blocks(procedural_memory)
-        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
         except Exception as e:
-            # 注释：输出错误日志。
             logger.error(f"Error generating procedural memory summary: {e}")
-            # 注释：执行当前语句，推进该函数的业务流程。
             raise
 
-        # 注释：判断条件 `metadata is None` 是否成立。
+        # 逻辑注释：过程性记忆必须有 metadata/作用域，否则总结出来的流程无法归属到具体 agent/run。
         if metadata is None:
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError("Metadata cannot be done for procedural memory.")
 
-        # 注释：计算并保存 元数据，供后续逻辑使用。
+        # 逻辑注释：在原 metadata 基础上标记 memory_type，后续可区分普通事实记忆和过程性记忆。
         metadata = {**metadata, "memory_type": MemoryType.PROCEDURAL.value}
-        # 注释：计算并保存 向量表示，供后续逻辑使用。
+        # 逻辑注释：查询向量用于语义召回，能找到表述不同但含义相近的记忆。
         embeddings = self.embedding_model.embed(procedural_memory, memory_action="add")
-        # 注释：计算并保存 记忆 ID，供后续逻辑使用。
+        # 逻辑注释：过程性记忆最终仍按普通记忆写入向量库和历史表，只是正文来自 LLM 总结。
         memory_id = self._create_memory(procedural_memory, {procedural_memory: embeddings}, metadata=metadata)
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event("mem0._create_procedural_memory", self, {"memory_id": memory_id, "sync_type": "sync"})
 
-        # 注释：计算并保存 result 变量，供后续逻辑使用。
+        # 逻辑注释：按 add 接口的返回格式包装过程性记忆创建结果。
         result = {"results": [{"id": memory_id, "memory": procedural_memory, "event": "ADD"}]}
 
-        # 注释：返回 `result` 给调用方。
         return result
 
-    # 注释：更新记忆的向量、载荷和历史记录。
+    # 逻辑注释：内部更新流程不仅改向量和 payload，还保留创建时间/作用域，记录历史，并重建相关实体链接。
     def _update_memory(self, memory_id, data, existing_embeddings, metadata=None):
-        # 注释：输出信息日志。
+        # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
         logger.info(f"Updating memory with {data=}")
 
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：计算并保存 existing_memory 变量，供后续逻辑使用。
+            # 逻辑注释：通过向量库 ID 直接取 payload，这是 get/update/delete 的基础读取路径。
             existing_memory = self.vector_store.get(vector_id=memory_id)
-        # 注释：捕获 Exception 异常并执行降级或错误处理。
+        # 逻辑注释：这里进入兜底路径，通常会从批量操作退化为逐条处理，提升整体成功率。
         except Exception:
-            # 注释：输出错误日志。
             logger.error(f"Error getting memory with ID {memory_id} during update.")
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError(f"Error getting memory with ID {memory_id}. Please provide a valid 'memory_id'")
 
-        # 注释：判断条件 `existing_memory is None` 是否成立。
+        # 逻辑注释：找不到旧记忆时不能继续更新/删除，必须向调用方报告无效 memory_id。
         if existing_memory is None:
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError(f"Memory with id {memory_id} not found. Please provide a valid 'memory_id'")
 
-        # 注释：计算并保存 prev_value 变量，供后续逻辑使用。
+        # 逻辑注释：保存旧文本，后面写历史记录时能形成 old_memory → new_memory 的变更链。
         prev_value = existing_memory.payload.get("data")
 
-        # 注释：深拷贝生成 new_metadata 变量，避免修改原始输入对象。
+        # 逻辑注释：更新时先从调用方新 metadata 开始，再补齐系统字段和旧作用域字段。
         new_metadata = deepcopy(metadata) if metadata is not None else {}
 
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+        # 逻辑注释：更新后的正文写回 data 字段，读取和搜索都会看到新文本。
         new_metadata["data"] = data
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+        # 逻辑注释：更新后重新计算内容 hash，保证后续去重依据和新文本一致。
         new_metadata["hash"] = hashlib.md5(data.encode()).hexdigest()
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+        # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
         new_metadata["text_lemmatized"] = lemmatize_for_bm25(data)
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+        # 逻辑注释：更新不能改变原创建时间，因此从旧 payload 继承 created_at。
         new_metadata["created_at"] = existing_memory.payload.get("created_at")
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+        # 逻辑注释：更新时间使用当前 UTC 时间，表示这次 update 的发生时间。
         new_metadata["updated_at"] = datetime.now(timezone.utc).isoformat()
 
         # Preserve session identifiers from existing memory only if not provided in new metadata
+        # 逻辑注释：如果调用方没显式覆盖 user_id，就沿用旧记忆的 user_id，避免更新后丢失作用域。
         if "user_id" not in new_metadata and "user_id" in existing_memory.payload:
-            # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
             new_metadata["user_id"] = existing_memory.payload["user_id"]
-        # 注释：判断条件 `"agent_id" not in new_metadata and "agent_id" in existing_memory.payload` 是否成立。
+        # 逻辑注释：agent_id 同样默认继承旧值，保持记忆仍在原 agent 作用域内。
         if "agent_id" not in new_metadata and "agent_id" in existing_memory.payload:
-            # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
             new_metadata["agent_id"] = existing_memory.payload["agent_id"]
-        # 注释：判断条件 `"run_id" not in new_metadata and "run_id" in existing_memory.payload` 是否成立。
+        # 逻辑注释：run_id 默认继承旧值，避免单条更新把记忆移出原运行范围。
         if "run_id" not in new_metadata and "run_id" in existing_memory.payload:
-            # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
             new_metadata["run_id"] = existing_memory.payload["run_id"]
-        # 注释：判断条件 `"actor_id" in existing_memory.payload` 是否成立。
+        # 逻辑注释：actor_id 来自原消息说话人，更新时继续保留，除非业务另行处理。
         if "actor_id" in existing_memory.payload:
-            # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
             new_metadata["actor_id"] = existing_memory.payload["actor_id"]
-        # 注释：判断条件 `"role" not in new_metadata and "role" in existing_memory.payload` 是否成立。
+        # 逻辑注释：role 默认继承旧值，让更新后的记忆仍知道原始消息角色。
         if "role" not in new_metadata and "role" in existing_memory.payload:
-            # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
             new_metadata["role"] = existing_memory.payload["role"]
 
-        # 注释：判断条件 `data in existing_embeddings` 是否成立。
+        # 逻辑注释：如果上层已传入新文本 embedding，就直接复用，避免二次 embedding 调用。
         if data in existing_embeddings:
-            # 注释：计算并保存 向量表示，供后续逻辑使用。
+            # 逻辑注释：复用调用方已经计算好的 embedding，减少重复计算和 provider 成本。
             embeddings = existing_embeddings[data]
-        # 注释：处理前面条件不成立时的默认分支。
         else:
-            # 注释：计算并保存 向量表示，供后续逻辑使用。
+            # 逻辑注释：查询向量用于语义召回，能找到表述不同但含义相近的记忆。
             embeddings = self.embedding_model.embed(data, "update")
 
-        # 注释：更新向量库中的指定记录。
+        # 逻辑注释：向量和 payload 一起更新，保证语义检索和返回内容同步变成新文本。
         self.vector_store.update(
             vector_id=memory_id,
             vector=embeddings,
             payload=new_metadata,
         )
-        # 注释：输出信息日志。
+        # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
         logger.info(f"Updating memory with ID {memory_id=} with {data=}")
 
-        # 注释：写入单条记忆变更历史。
         self.db.add_history(
             memory_id,
             prev_value,
@@ -2514,40 +2333,40 @@ class Memory(MemoryBase):
 
         # Entity-store cleanup: strip this memory's id from old-text entities,
         # then re-extract entities from the new text and link them back.
+        # 逻辑注释：从更新后的 metadata 提取 session filters，用于限定实体清理/重建的作用域。
         session_filters = {k: new_metadata[k] for k in ("user_id", "agent_id", "run_id") if new_metadata.get(k)}
-        # 注释：调用 self._remove_memory_from_entity_store 执行对应操作。
+        # 逻辑注释：先把该 memory_id 从旧实体链接里移除，避免旧文本实体继续影响搜索。
         self._remove_memory_from_entity_store(memory_id, session_filters)
-        # 注释：调用 self._link_entities_for_memory 执行对应操作。
+        # 逻辑注释：再按新文本重新抽实体并链接，让实体索引和更新后的记忆保持一致。
         self._link_entities_for_memory(memory_id, data, session_filters)
 
-        # 注释：返回 `memory_id` 给调用方。
+        # 逻辑注释：返回 memory_id 让上层可以继续记录、链接实体或给用户展示操作结果。
         return memory_id
 
-    # 注释：删除记忆并清理相关历史或实体索引。
+    # 逻辑注释：内部删除流程把向量库删除和历史审计打包在一起，并同步清理实体反向索引。
     def _delete_memory(self, memory_id, existing_memory=None):
-        # 注释：输出信息日志。
+        # 逻辑注释：删除前记录目标 ID，方便调试删除链路。
         logger.info(f"Deleting memory with {memory_id=}")
-        # 注释：判断条件 `existing_memory is None` 是否成立。
+        # 逻辑注释：找不到旧记忆时不能继续更新/删除，必须向调用方报告无效 memory_id。
         if existing_memory is None:
-            # 注释：计算并保存 existing_memory 变量，供后续逻辑使用。
+            # 逻辑注释：通过向量库 ID 直接取 payload，这是 get/update/delete 的基础读取路径。
             existing_memory = self.vector_store.get(vector_id=memory_id)
-            # 注释：判断条件 `existing_memory is None` 是否成立。
+            # 逻辑注释：找不到旧记忆时不能继续更新/删除，必须向调用方报告无效 memory_id。
             if existing_memory is None:
-                # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+                # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
                 raise ValueError(f"Memory with id {memory_id} not found. Please provide a valid 'memory_id'")
-        # 注释：计算并保存 prev_value 变量，供后续逻辑使用。
+        # 逻辑注释：删除历史需要保留被删除前的文本，因此先从 payload 取出旧值。
         prev_value = existing_memory.payload.get("data", "")
-        # 注释：计算并保存 created_at 变量，供后续逻辑使用。
+        # 逻辑注释：删除历史里保留原创建时间，并统一带时区时间到 UTC，方便审计排序。
         created_at = _normalize_iso_timestamp_to_utc(existing_memory.payload.get("created_at"))
-        # 注释：计算并保存 updated_at 变量，供后续逻辑使用。
+        # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
         updated_at = datetime.now(timezone.utc).isoformat()
-        # 注释：计算并保存 向量库载荷数据，供后续逻辑使用。
+        # 逻辑注释：旧 payload 可能为空，用空 dict 兜底以便安全提取 session filters。
         payload = existing_memory.payload or {}
-        # 注释：计算并保存 session_filters 变量，供后续逻辑使用。
+        # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
         session_filters = {k: payload[k] for k in ("user_id", "agent_id", "run_id") if payload.get(k)}
-        # 注释：删除向量库中的指定记录。
+        # 逻辑注释：先从向量库删除主记忆，后面再写 DELETE 历史记录。
         self.vector_store.delete(vector_id=memory_id)
-        # 注释：写入单条记忆变更历史。
         self.db.add_history(
             memory_id,
             prev_value,
@@ -2562,12 +2381,13 @@ class Memory(MemoryBase):
 
         # Entity-store cleanup: strip this memory's id from any entity records
         # that linked to it. Non-fatal — the helper swallows errors.
+        # 逻辑注释：先把该 memory_id 从旧实体链接里移除，避免旧文本实体继续影响搜索。
         self._remove_memory_from_entity_store(memory_id, session_filters)
 
-        # 注释：返回 `memory_id` 给调用方。
+        # 逻辑注释：返回 memory_id 让上层可以继续记录、链接实体或给用户展示操作结果。
         return memory_id
 
-    # 注释：重置底层存储中的所有记忆数据。
+    # 逻辑注释：重置整个记忆系统：清理历史表、重建向量库，并在实体库已初始化时一并重置。
     def reset(self):
         """
         Reset the memory store by:
@@ -2575,174 +2395,168 @@ class Memory(MemoryBase):
             Resets the database
             Recreates the vector store with a new client
         """
-        # 注释：输出警告日志。
+        # 逻辑注释：reset 是破坏性操作，先用 warning 日志提示会清空所有记忆。
         logger.warning("Resetting all memories")
 
-        # 注释：判断条件 `hasattr(self.db, "connection") and self.db.connection` 是否成立。
+        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
         if hasattr(self.db, "connection") and self.db.connection:
-            # 注释：调用 self.db.connection.execute 执行对应操作。
+            # 逻辑注释：先删历史表，确保 reset 后历史状态和向量库状态一致地从空开始。
             self.db.connection.execute("DROP TABLE IF EXISTS history")
-            # 注释：调用 self.db.connection.close 执行对应操作。
+            # 逻辑注释：删除表后关闭旧 SQLite 连接，避免后续继续使用失效连接。
             self.db.connection.close()
 
-        # 注释：设置当前实例的 db 属性，用于后续方法共享状态。
+        # 逻辑注释：SQLite 用来保存消息上下文和变更历史，和向量库形成“语义索引 + 审计记录”的双存储结构。
         self.db = SQLiteManager(self.config.history_db_path)
 
-        # 注释：判断条件 `hasattr(self.vector_store, "reset")` 是否成立。
+        # 逻辑注释：优先使用向量库自身 reset 能力，适配支持原地清空的 backend。
         if hasattr(self.vector_store, "reset"):
-            # 注释：设置当前实例的 vector_store 属性，用于后续方法共享状态。
+            # 逻辑注释：通过工厂 reset 向量库，保持不同 provider 的重置逻辑集中管理。
             self.vector_store = VectorStoreFactory.reset(self.vector_store)
-        # 注释：处理前面条件不成立时的默认分支。
         else:
-            # 注释：输出警告日志。
             logger.warning("Vector store does not support reset. Skipping.")
-            # 注释：调用 self.vector_store.delete_col 执行对应操作。
+            # 逻辑注释：先从向量库删除主记忆，后面再写 DELETE 历史记录。
             self.vector_store.delete_col()
-            # 注释：设置当前实例的 vector_store 属性，用于后续方法共享状态。
+            # 逻辑注释：创建向量存储后，记忆文本的向量和 payload 都会通过它进行插入、查询、更新和删除。
             self.vector_store = VectorStoreFactory.create(
                 self.config.vector_store.provider, self.config.vector_store.config
             )
         # Reset entity store if initialized
+        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
         if self._entity_store is not None:
-            # 注释：进入可能抛出异常的代码块。
             try:
-                # 注释：调用 self._entity_store.reset 执行对应操作。
+                # 逻辑注释：实体库已经初始化时也要重置，避免主记忆清空后实体索引残留。
                 self._entity_store.reset()
-            # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+            # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
             except Exception as e:
-                # 注释：输出警告日志。
                 logger.warning(f"Failed to reset entity store: {e}")
-            # 注释：设置当前实例的 _entity_store 属性，用于后续方法共享状态。
+            # 逻辑注释：实体库先置空，后面通过 property 懒加载，避免不使用实体能力时创建多余向量库。
             self._entity_store = None
 
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event("mem0.reset", self, {"sync_type": "sync"})
 
-    # 注释：定义 close 函数/方法，封装一段可复用逻辑。
+    # 逻辑注释：释放 SQLite 等持有的资源，避免长生命周期进程里连接泄漏。
     def close(self):
         """Release resources held by this Memory instance (SQLite connections, etc.)."""
-        # 注释：判断条件 `hasattr(self, "db") and self.db is not None` 是否成立。
+        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
         if hasattr(self, "db") and self.db is not None:
-            # 注释：调用 self.db.close 执行对应操作。
+            # 逻辑注释：关闭 SQLite 连接，释放文件句柄/锁。
             self.db.close()
-            # 注释：设置当前实例的 db 属性，用于后续方法共享状态。
+            # 逻辑注释：关闭后置空引用，防止后续误用已关闭连接。
             self.db = None
 
-    # 注释：预留聊天接口。
+    # 逻辑注释：占位接口，明确当前 Memory 类还没有实现聊天能力。
     def chat(self, query):
-        # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+        # 逻辑注释：显式抛出未实现错误，比静默返回更容易让调用方发现该接口不可用。
         raise NotImplementedError("Chat function not implemented yet.")
 
 
-# 注释：定义 AsyncMemory 类，并继承/使用 (MemoryBase) 中的基础能力。
+# 逻辑注释：异步版 Memory，实现与同步版几乎相同的业务流程，但通过 asyncio.to_thread 包装阻塞型 provider 调用。
 class AsyncMemory(MemoryBase):
-    # 注释：初始化 Memory 实例并创建模型、向量库、数据库等依赖。
+    # 逻辑注释：初始化 Memory 实例需要把配置里的各类 provider 变成真实客户端，并准备向量库、LLM、SQLite 历史库和可选 reranker。
     def __init__(self, config: MemoryConfig = MemoryConfig()):
-        # 注释：设置当前实例的 config 属性，用于后续方法共享状态。
+        # 逻辑注释：把配置保存到实例上，后续所有 provider 初始化、路径和版本信息都从这里读取。
         self.config = config
 
-        # 注释：设置当前实例的 embedding_model 属性，用于后续方法共享状态。
+        # 逻辑注释：根据配置创建 embedding 模型；Memory 不关心具体 provider，只依赖统一 embed 接口。
         self.embedding_model = EmbedderFactory.create(
             self.config.embedder.provider,
             self.config.embedder.config,
             self.config.vector_store.config,
         )
-        # 注释：设置当前实例的 vector_store 属性，用于后续方法共享状态。
+        # 逻辑注释：创建向量存储后，记忆文本的向量和 payload 都会通过它进行插入、查询、更新和删除。
         self.vector_store = VectorStoreFactory.create(
             self.config.vector_store.provider, self.config.vector_store.config
         )
-        # 注释：设置当前实例的 llm 属性，用于后续方法共享状态。
+        # 逻辑注释：创建 LLM 客户端，infer/procedural 模式会用它从对话中抽取或总结记忆。
         self.llm = LlmFactory.create(self.config.llm.provider, self.config.llm.config)
-        # 注释：设置当前实例的 db 属性，用于后续方法共享状态。
+        # 逻辑注释：SQLite 用来保存消息上下文和变更历史，和向量库形成“语义索引 + 审计记录”的双存储结构。
         self.db = SQLiteManager(self.config.history_db_path)
-        # 注释：设置当前实例的 collection_name 属性，用于后续方法共享状态。
+        # 逻辑注释：保存主记忆 collection 名，实体库会基于这个名字派生出独立 collection。
         self.collection_name = self.config.vector_store.config.collection_name
-        # 注释：设置当前实例的 api_version 属性，用于后续方法共享状态。
+        # 逻辑注释：保存 API 版本，遥测事件会带上它，便于区分不同版本的行为。
         self.api_version = self.config.version
-        # 注释：设置当前实例的 custom_instructions 属性，用于后续方法共享状态。
+        # 逻辑注释：全局自定义指令会在 LLM 抽取记忆时作为默认额外要求。
         self.custom_instructions = self.config.custom_instructions
-        # 注释：设置当前实例的 _entity_store 属性，用于后续方法共享状态。
+        # 逻辑注释：实体库先置空，后面通过 property 懒加载，避免不使用实体能力时创建多余向量库。
         self._entity_store = None
 
         # Initialize reranker if configured
+        # 逻辑注释：reranker 默认不启用；只有配置显式提供时才创建，避免额外依赖和成本。
         self.reranker = None
-        # 注释：判断条件 `config.reranker` 是否成立。
+        # 逻辑注释：检测到 reranker 配置才初始化二次排序器，搜索时也会按开关选择是否使用。
         if config.reranker:
-            # 注释：设置当前实例的 reranker 属性，用于后续方法共享状态。
+            # 逻辑注释：通过工厂创建 reranker，使不同重排模型可以用同一套 Memory 搜索逻辑接入。
             self.reranker = RerankerFactory.create(
                 config.reranker.provider,
                 config.reranker.config
             )
 
-        # 注释：判断条件 `MEM0_TELEMETRY` 是否成立。
+        # 逻辑注释：只有遥测开关打开时才准备遥测专用向量库，普通运行不会产生额外存储开销。
         if MEM0_TELEMETRY:
-            # 注释：深拷贝生成 telemetry_config 变量，避免修改原始输入对象。
             telemetry_config = _safe_deepcopy_config(self.config.vector_store.config)
-            # 注释：计算并保存 collection_name 变量，供后续逻辑使用。
+            # 逻辑注释：遥测数据写入独立 collection，避免和用户真实记忆混在一起。
             telemetry_config.collection_name = "mem0migrations"
-            # 注释：判断条件 `self.config.vector_store.provider in ["faiss", "qdrant"]` 是否成立。
+            # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
             if self.config.vector_store.provider in ["faiss", "qdrant"]:
-                # 注释：计算并保存 provider_path 变量，供后续逻辑使用。
+                # 逻辑注释：文件型向量库需要独立目录，按 provider 名构造迁移/遥测存储路径。
                 provider_path = f"migrations_{self.config.vector_store.provider}"
-                # 注释：计算并保存 path 变量，供后续逻辑使用。
                 telemetry_config.path = os.path.join(mem0_dir, provider_path)
-                # 注释：确保目标目录存在。
+                # 逻辑注释：目录不存在时提前创建，避免初始化本地向量库时因路径缺失失败。
                 os.makedirs(telemetry_config.path, exist_ok=True)
-            # 注释：设置当前实例的 _telemetry_vector_store 属性，用于后续方法共享状态。
+            # 逻辑注释：创建遥测专用向量库客户端，后续 capture_event 可复用这个存储。
             self._telemetry_vector_store = VectorStoreFactory.create(self.config.vector_store.provider, telemetry_config)
 
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：初始化结束后记录一次 init 事件，并标明 sync/async，便于观测两种实现的使用情况。
         capture_event("mem0.init", self, {"sync_type": "async"})
 
-    # 注释：应用 property 装饰器，调整下面定义的函数或属性行为。
+    # 逻辑注释：把这个方法暴露成只读属性，调用方访问时像字段一样自然，同时内部仍可做懒加载。
     @property
-    # 注释：定义 entity_store 函数/方法，封装一段可复用逻辑。
+    # 逻辑注释：实体向量库采用懒加载：只有真正需要实体链接/增强检索时才创建，减少初始化成本和嵌入式向量库锁冲突。
     def entity_store(self):
         """Lazily initialize entity store on first use."""
-        # 注释：判断条件 `self._entity_store is None` 是否成立。
+        # 逻辑注释：第一次访问实体库才进入初始化，后续直接复用已经创建的实例。
         if self._entity_store is None:
-            # 注释：深拷贝生成 entity_config 变量，避免修改原始输入对象。
+            # 逻辑注释：实体库复用主向量库配置的副本，避免直接修改主记忆 collection 配置。
             entity_config = _safe_deepcopy_config(self.config.vector_store.config)
-            # 注释：计算并保存 entity_collection 变量，供后续逻辑使用。
+            # 逻辑注释：保存主记忆 collection 名，实体库会基于这个名字派生出独立 collection。
             entity_collection = f"{self.collection_name}_entities"
-            # 注释：判断条件 `hasattr(entity_config, 'collection_name')` 是否成立。
+            # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
             if hasattr(entity_config, 'collection_name'):
-                # 注释：计算并保存 collection_name 变量，供后续逻辑使用。
+                # 逻辑注释：把副本的 collection 改成实体 collection，后续实体向量不会写入主记忆库。
                 entity_config.collection_name = entity_collection
-            # 注释：当前一个条件不成立时，继续判断 `isinstance(entity_config, dict)`。
+            # 逻辑注释：这是对前面判断的补充分支，用来兼容另一种输入/配置形态。
             elif isinstance(entity_config, dict):
-                # 注释：计算并保存 entity_config 变量，供后续逻辑使用。
+                # 逻辑注释：把副本的 collection 改成实体 collection，后续实体向量不会写入主记忆库。
                 entity_config['collection_name'] = entity_collection
             # For Qdrant, share the existing client to avoid RocksDB lock contention
             # when using embedded mode (path=...). QdrantConfig.client takes precedence
             # over host/port/path.
+            # 逻辑注释：Qdrant 嵌入式模式下共享已有 client，避免同一路径被多个 RocksDB 实例同时打开导致锁冲突。
             if self.config.vector_store.provider == "qdrant" and hasattr(self.vector_store, "client"):
-                # 注释：判断条件 `hasattr(entity_config, "client")` 是否成立。
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if hasattr(entity_config, "client"):
-                    # 注释：计算并保存 client 变量，供后续逻辑使用。
+                    # 逻辑注释：把主向量库的 client 注入实体配置，实体库和主库共享同一个底层连接。
                     entity_config.client = self.vector_store.client
-                # 注释：当前一个条件不成立时，继续判断 `isinstance(entity_config, dict)`。
+                # 逻辑注释：这是对前面判断的补充分支，用来兼容另一种输入/配置形态。
                 elif isinstance(entity_config, dict):
-                    # 注释：计算并保存 entity_config 变量，供后续逻辑使用。
+                    # 逻辑注释：把主向量库的 client 注入实体配置，实体库和主库共享同一个底层连接。
                     entity_config["client"] = self.vector_store.client
-            # 注释：设置当前实例的 _entity_store 属性，用于后续方法共享状态。
             self._entity_store = VectorStoreFactory.create(
                 self.config.vector_store.provider, entity_config
             )
-        # 注释：返回 `self._entity_store` 给调用方。
         return self._entity_store
 
-    # 注释：定义 _upsert_entity_async 函数/方法，封装一段可复用逻辑。
+    # 逻辑注释：异步版实体写入逻辑保持和同步版一致，只是把阻塞的 embedding/vector 调用放到线程里执行。
     async def _upsert_entity_async(self, entity_text, entity_type, memory_id, filters):
         """Async variant of `_upsert_entity` — per-entity search-then-update-or-insert."""
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：计算并保存 实体向量，供后续逻辑使用。
+            # 逻辑注释：实体也需要单独向量化，才能在实体库里用相似度判断是否已有同一实体。
             entity_embedding = await asyncio.to_thread(self.embedding_model.embed, entity_text, "add")
-            # 注释：计算并保存 检索过滤条件，供后续逻辑使用。
+            # 逻辑注释：实体检索只使用 session 级作用域字段，保证实体链接不会跨用户/agent/run 串数据。
             search_filters = {k: v for k, v in filters.items() if k in ("user_id", "agent_id", "run_id") and v}
 
-            # 注释：计算并保存 existing 变量，供后续逻辑使用。
+            # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
             existing = await asyncio.to_thread(
                 self.entity_store.search,
                 query=entity_text,
@@ -2751,204 +2565,165 @@ class AsyncMemory(MemoryBase):
                 filters=search_filters,
             )
 
-            # 注释：判断条件 `existing and existing[0].score >= 0.95` 是否成立。
+            # 逻辑注释：0.95 作为近似同实体阈值，只有非常相近时才合并，降低误把不同实体合并的风险。
             if existing and existing[0].score >= 0.95:
-                # 注释：计算并保存 match 变量，供后续逻辑使用。
                 match = existing[0]
-                # 注释：计算并保存 向量库载荷数据，供后续逻辑使用。
                 payload = match.payload or {}
-                # 注释：计算并保存 linked_ids 变量，供后续逻辑使用。
+                # 逻辑注释：实体 payload 里维护反向链接列表，用来知道这个实体关联了哪些记忆。
                 linked_ids = payload.get("linked_memory_ids", [])
-                # 注释：判断条件 `memory_id not in linked_ids` 是否成立。
+                # 逻辑注释：只有新记忆 ID 不在列表里才追加，避免重复链接导致后续 boost 被放大。
                 if memory_id not in linked_ids:
-                    # 注释：调用 linked_ids.append 执行对应操作。
                     linked_ids.append(memory_id)
-                    # 注释：计算并保存 向量库载荷数据，供后续逻辑使用。
                     payload["linked_memory_ids"] = linked_ids
-                    # 注释：等待异步操作 `asyncio.to_thread(` 完成。
+                    # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
                     await asyncio.to_thread(
                         self.entity_store.update,
                         vector_id=match.id,
                         vector=None,
                         payload=payload,
                     )
-            # 注释：处理前面条件不成立时的默认分支。
             else:
-                # 注释：计算并保存 entity_id 变量，供后续逻辑使用。
+                # 逻辑注释：新实体需要独立 ID，和 memory_id 分开管理，便于实体库单独增删改查。
                 entity_id = str(uuid.uuid4())
-                # 注释：计算并保存 entity_payload 变量，供后续逻辑使用。
+                # 逻辑注释：实体 payload 同时保存实体文本、类型、关联记忆和 session 过滤字段，后续搜索/清理都依赖这些信息。
                 entity_payload = {
                     "data": entity_text,
                     "entity_type": entity_type,
                     "linked_memory_ids": [memory_id],
                     **{k: v for k, v in search_filters.items()},
                 }
-                # 注释：等待异步操作 `asyncio.to_thread(` 完成。
+                # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
                 await asyncio.to_thread(
                     self.entity_store.insert,
                     vectors=[entity_embedding],
                     ids=[entity_id],
                     payloads=[entity_payload],
                 )
-        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
         except Exception as e:
-            # 注释：输出警告日志。
+            # 逻辑注释：实体索引失败不应影响主记忆写入，所以这里只记录警告而不是抛出。
             logger.warning(f"Entity upsert failed for '{entity_text}' (async): {e}")
 
-    # 注释：从实体索引中移除某条记忆的关联。
+    # 逻辑注释：删除或更新记忆后清理实体索引：从实体的 linked_memory_ids 中移除该 memory_id，孤立实体直接删除。
     async def _remove_memory_from_entity_store(self, memory_id, filters):
         """Async variant of `Memory._remove_memory_from_entity_store`."""
-        # 注释：判断条件 `self._entity_store is None` 是否成立。
+        # 逻辑注释：第一次访问实体库才进入初始化，后续直接复用已经创建的实例。
         if self._entity_store is None:
-            # 注释：结束函数并返回空值。
             return
-        # 注释：计算并保存 检索过滤条件，供后续逻辑使用。
+        # 逻辑注释：实体检索只使用 session 级作用域字段，保证实体链接不会跨用户/agent/run 串数据。
         search_filters = {k: v for k, v in filters.items() if k in ("user_id", "agent_id", "run_id") and v}
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：计算并保存 listed 变量，供后续逻辑使用。
+            # 逻辑注释：清理时先列出当前作用域下的实体，再逐个检查是否链接了待删除/更新的记忆。
             listed = await asyncio.to_thread(self.entity_store.list, filters=search_filters, top_k=10000)
-            # 注释：计算并保存 rows 变量，供后续逻辑使用。
+            # 逻辑注释：不同向量库 list 返回格式不一致，这里兼容嵌套列表和扁平列表两种结构。
             rows = listed[0] if isinstance(listed, (list, tuple)) and listed and isinstance(listed[0], list) else listed
-            # 注释：遍历 rows or [] 中的元素，并将当前项赋给 row。
+            # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
             for row in rows or []:
-                # 注释：进入可能抛出异常的代码块。
                 try:
-                    # 注释：计算并保存 向量库载荷数据，供后续逻辑使用。
+                    # 逻辑注释：实体行可能来自不同实现，统一用 getattr 安全取 payload。
                     payload = getattr(row, "payload", None) or {}
-                    # 注释：计算并保存 linked 变量，供后续逻辑使用。
                     linked = payload.get("linked_memory_ids", [])
-                    # 注释：判断条件 `not isinstance(linked, list) or memory_id not in linked` 是否成立。
+                    # 逻辑注释：linked_memory_ids 不是列表或不包含目标 memory_id 时，说明这条实体不需要处理。
                     if not isinstance(linked, list) or memory_id not in linked:
-                        # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                         continue
-                    # 注释：计算并保存 remaining 变量，供后续逻辑使用。
+                    # 逻辑注释：构造移除目标 memory_id 后的新链接列表，用于判断实体是否还被其他记忆引用。
                     remaining = [mid for mid in linked if mid != memory_id]
-                    # 注释：判断条件 `not remaining` 是否成立。
+                    # 逻辑注释：没有任何记忆再引用该实体时，实体节点已经孤立，可以删除。
                     if not remaining:
-                        # 注释：进入可能抛出异常的代码块。
                         try:
-                            # 注释：等待异步操作 `asyncio.to_thread(self.entity_store.delete, vector_id=row.id)` 完成。
+                            # 逻辑注释：删除孤立实体，避免实体库里留下无法增强任何记忆的脏数据。
                             await asyncio.to_thread(self.entity_store.delete, vector_id=row.id)
-                        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                         except Exception as e:
-                            # 注释：输出调试日志。
                             logger.debug(f"Entity delete failed for id={row.id} (async): {e}")
-                    # 注释：处理前面条件不成立时的默认分支。
                     else:
-                        # 注释：计算并保存 实体文本，供后续逻辑使用。
+                        # 逻辑注释：实体仍被其他记忆引用时，需要取出实体文本重新生成向量以满足 update 接口要求。
                         entity_text = payload.get("data")
-                        # 注释：判断条件 `not isinstance(entity_text, str) or not entity_text` 是否成立。
+                        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                         if not isinstance(entity_text, str) or not entity_text:
-                            # 注释：输出调试日志。
                             logger.debug(f"Entity id={row.id} missing 'data'; skipping update during cleanup (async)")
-                            # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                             continue
-                        # 注释：进入可能抛出异常的代码块。
                         try:
-                            # 注释：计算并保存 vec 变量，供后续逻辑使用。
+                            # 逻辑注释：有些向量库 update 要求同时传 vector，所以这里即使只改 payload 也重新计算实体向量。
                             vec = await asyncio.to_thread(self.embedding_model.embed, entity_text, "update")
-                        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                         except Exception as e:
-                            # 注释：输出调试日志。
                             logger.debug(f"Entity re-embed failed for '{entity_text}' (async): {e}")
-                            # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                             continue
-                        # 注释：计算并保存 new_payload 变量，供后续逻辑使用。
+                        # 逻辑注释：保留实体原有信息，只替换 linked_memory_ids，避免丢失 entity_type/session 等字段。
                         new_payload = {**payload, "linked_memory_ids": remaining}
-                        # 注释：进入可能抛出异常的代码块。
                         try:
-                            # 注释：等待异步操作 `asyncio.to_thread(` 完成。
+                            # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
                             await asyncio.to_thread(
                                 self.entity_store.update,
                                 vector_id=row.id,
                                 vector=vec,
                                 payload=new_payload,
                             )
-                        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                         except Exception as e:
-                            # 注释：输出调试日志。
                             logger.debug(f"Entity update failed for id={row.id} (async): {e}")
-                # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                 except Exception as e:
-                    # 注释：输出调试日志。
                     logger.debug(f"Entity cleanup error (async): {e}")
-        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
         except Exception as e:
-            # 注释：输出警告日志。
             logger.warning(f"Entity store cleanup failed for memory_id={memory_id} (async): {e}")
 
-    # 注释：抽取记忆文本中的实体并建立关联。
+    # 逻辑注释：从单条记忆文本中抽取实体并建立链接，主要用于 update 后把新文本重新挂到实体索引上。
     async def _link_entities_for_memory(self, memory_id, text, filters):
         """Async variant of `Memory._link_entities_for_memory`."""
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：计算并保存 entities 变量，供后续逻辑使用。
+            # 逻辑注释：从记忆文本抽取实体，只有抽到实体才需要进入实体链接流程。
             entities = await asyncio.to_thread(extract_entities, text)
-            # 注释：判断条件 `not entities` 是否成立。
+            # 逻辑注释：没有实体时直接返回，避免空循环和不必要的向量库访问。
             if not entities:
-                # 注释：结束函数并返回空值。
                 return
-            # 注释：初始化 seen 变量 为空集合，用于后续去重。
+            # 逻辑注释：用集合在单条文本内去重，避免同一个实体重复 upsert。
             seen = set()
-            # 注释：遍历 entities 中的元素，并将当前项赋给 entity_type, entity_text。
+            # 逻辑注释：逐个处理抽取出的实体，把每个实体都链接到当前记忆。
             for entity_type, entity_text in entities:
-                # 注释：计算并保存 key 变量，供后续逻辑使用。
+                # 逻辑注释：实体去重用小写+去空白后的规范 key，降低大小写和首尾空格带来的重复。
                 key = entity_text.strip().lower()
-                # 注释：判断条件 `not key or key in seen` 是否成立。
+                # 逻辑注释：空实体或已处理实体都跳过，保持实体链接的唯一性。
                 if not key or key in seen:
-                    # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                     continue
-                # 注释：调用 seen.add 执行对应操作。
                 seen.add(key)
-                # 注释：进入可能抛出异常的代码块。
                 try:
-                    # 注释：等待异步操作 `self._upsert_entity_async(entity_text, entity_type, memory_id, filters)` 完成。
+                    # 逻辑注释：每个有效实体交给 upsert，内部决定复用旧实体还是新建实体。
                     await self._upsert_entity_async(entity_text, entity_type, memory_id, filters)
-                # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                 except Exception as e:
-                    # 注释：输出调试日志。
                     logger.debug(f"Entity link failed for '{entity_text}' (async): {e}")
-        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
         except Exception as e:
-            # 注释：输出警告日志。
             logger.warning(f"Entity linking failed for memory_id={memory_id} (async): {e}")
 
-    # 注释：应用 classmethod 装饰器，调整下面定义的函数或属性行为。
+    # 逻辑注释：类方法不依赖已有实例，适合作为另一种构造入口。
     @classmethod
-    # 注释：根据字典配置创建 Memory 实例。
+    # 逻辑注释：从普通字典创建配置对象，再交给构造函数；这里把外部配置入口和类初始化解耦。
     def from_config(cls, config_dict: Dict[str, Any]):
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：计算并保存 配置对象，供后续逻辑使用。
             config = cls._process_config(config_dict)
-            # 注释：计算并保存 配置对象，供后续逻辑使用。
             config = MemoryConfig(**config_dict)
-        # 注释：捕获 ValidationError as e 异常并执行降级或错误处理。
+        # 逻辑注释：配置校验错误需要原样抛出，调用方才能看到 Pydantic 提供的具体字段问题。
         except ValidationError as e:
-            # 注释：输出错误日志。
             logger.error(f"Configuration validation error: {e}")
-            # 注释：执行当前语句，推进该函数的业务流程。
             raise
-        # 注释：返回 `cls(config)` 给调用方。
         return cls(config)
 
-    # 注释：应用 staticmethod 装饰器，调整下面定义的函数或属性行为。
+    # 逻辑注释：静态方法不依赖实例状态，这里用于纯配置处理/转换逻辑。
     @staticmethod
-    # 注释：预处理配置字典。
+    # 逻辑注释：当前只是透传配置，保留这个钩子方便以后在构造 MemoryConfig 前做兼容性转换。
     def _process_config(config_dict: Dict[str, Any]) -> Dict[str, Any]:
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：返回 `config_dict` 给调用方。
             return config_dict
-        # 注释：捕获 ValidationError as e 异常并执行降级或错误处理。
+        # 逻辑注释：配置校验错误需要原样抛出，调用方才能看到 Pydantic 提供的具体字段问题。
         except ValidationError as e:
-            # 注释：输出错误日志。
             logger.error(f"Configuration validation error: {e}")
-            # 注释：执行当前语句，推进该函数的业务流程。
             raise
 
-    # 注释：定义 _should_use_agent_memory_extraction 函数/方法，封装一段可复用逻辑。
+    # 逻辑注释：根据是否有 agent_id 且消息里是否出现 assistant，决定记忆应偏向 agent 视角还是 user 视角。
     def _should_use_agent_memory_extraction(self, messages, metadata):
         """Determine whether to use agent memory extraction based on the logic:
         - If agent_id is present and messages contain assistant role -> True
@@ -2970,7 +2745,7 @@ class AsyncMemory(MemoryBase):
         # Use agent memory extraction if agent_id is present and there are assistant messages
         return has_agent_id and has_assistant_messages
 
-    # 注释：新增记忆入口，负责校验输入并写入记忆。
+    # 逻辑注释：新增记忆的公共入口：先确定作用域和输入格式，再按 procedural/raw/infer 三条路径分流。
     async def add(
         self,
         messages,
@@ -3001,31 +2776,31 @@ class AsyncMemory(MemoryBase):
         Returns:
             dict: A dictionary containing the result of the memory addition operation.
         """
-        # 注释：为 `processed_metadata, effective_filters` 赋值，准备后续处理所需的数据。
+        # 逻辑注释：新增记忆前先统一构造 metadata 和 filters，保证写入、检索旧记忆和历史上下文使用同一作用域。
         processed_metadata, effective_filters = _build_filters_and_metadata(
             user_id=user_id, agent_id=agent_id, run_id=run_id, input_metadata=metadata
         )
 
-        # 注释：判断条件 `memory_type is not None and memory_type != MemoryType.PROCEDURAL.value` 是否成立。
+        # 逻辑注释：当前只额外支持 procedural_memory；其他 memory_type 会让调用方误以为有别的处理逻辑，因此拒绝。
         if memory_type is not None and memory_type != MemoryType.PROCEDURAL.value:
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError(
                 f"Invalid 'memory_type'. Please pass {MemoryType.PROCEDURAL.value} to create procedural memories."
             )
 
-        # 注释：判断条件 `isinstance(messages, str)` 是否成立。
+        # 逻辑注释：单字符串输入被包装成 user 消息，方便后续统一按消息列表处理。
         if isinstance(messages, str):
-            # 注释：计算并保存 消息列表，供后续逻辑使用。
+            # 逻辑注释：把简写输入转换成标准 role/content 结构，后面的解析和 LLM prompt 不需要再分支处理。
             messages = [{"role": "user", "content": messages}]
 
-        # 注释：当前一个条件不成立时，继续判断 `isinstance(messages, dict)`。
+        # 逻辑注释：这是对前面判断的补充分支，用来兼容另一种输入/配置形态。
         elif isinstance(messages, dict):
-            # 注释：计算并保存 消息列表，供后续逻辑使用。
+            # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
             messages = [messages]
 
-        # 注释：当前一个条件不成立时，继续判断 `not isinstance(messages, list)`。
+        # 逻辑注释：这是对前面判断的补充分支，用来兼容另一种输入/配置形态。
         elif not isinstance(messages, list):
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise Mem0ValidationError(
                 message="messages must be str, dict, or list[dict]",
                 error_code="VALIDATION_003",
@@ -3033,30 +2808,29 @@ class AsyncMemory(MemoryBase):
                 suggestion="Convert your input to a string, dictionary, or list of dictionaries."
             )
 
-        # 注释：判断条件 `agent_id is not None and memory_type == MemoryType.PROCEDURAL.value` 是否成立。
+        # 逻辑注释：过程性记忆要求 agent 作用域，因为它描述的是 agent 的行为流程，而不是普通用户事实。
         if agent_id is not None and memory_type == MemoryType.PROCEDURAL.value:
-            # 注释：计算并保存 结果集合，供后续逻辑使用。
+            # 逻辑注释：命中过程序记忆分支后直接生成并存储 procedural memory，不再走普通事实抽取流程。
             results = await self._create_procedural_memory(
+                # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                 messages, metadata=processed_metadata, prompt=prompt, llm=llm
             )
-            # 注释：返回 `results` 给调用方。
             return results
 
-        # 注释：判断条件 `self.config.llm.config.get("enable_vision")` 是否成立。
+        # 逻辑注释：如果配置启用视觉能力，消息解析要保留/处理图像内容，让 LLM 能理解多模态输入。
         if self.config.llm.config.get("enable_vision"):
-            # 注释：计算并保存 消息列表，供后续逻辑使用。
+            # 逻辑注释：视觉消息先规范化为 LLM 可接收格式；未启用视觉时仍会做基础消息清洗。
             messages = parse_vision_messages(messages, self.llm, self.config.llm.config.get("vision_details"))
-        # 注释：处理前面条件不成立时的默认分支。
         else:
-            # 注释：计算并保存 消息列表，供后续逻辑使用。
+            # 逻辑注释：视觉消息先规范化为 LLM 可接收格式；未启用视觉时仍会做基础消息清洗。
             messages = parse_vision_messages(messages)
 
-        # 注释：计算并保存 vector_store_result 变量，供后续逻辑使用。
+        # 逻辑注释：普通记忆最终交给向量写入流程处理，add 只负责入口校验和分流。
         vector_store_result = await self._add_to_vector_store(messages, processed_metadata, effective_filters, infer, prompt=prompt)
-        # 注释：返回 `{"results": vector_store_result}` 给调用方。
+        # 逻辑注释：对外统一用 results 包一层，保持 add/search/get_all 等接口返回结构一致。
         return {"results": vector_store_result}
 
-    # 注释：将消息转换为记忆并写入向量存储。
+    # 逻辑注释：真正写入向量库的核心流程：raw 模式直接存，infer 模式走“检索旧记忆→LLM 抽取→去重→批量入库→实体链接”。
     async def _add_to_vector_store(
         self,
         messages: list,
@@ -3065,48 +2839,47 @@ class AsyncMemory(MemoryBase):
         infer: bool,
         prompt: Optional[str] = None,
     ):
-        # 注释：判断条件 `not infer` 是否成立。
+        # 逻辑注释：关闭 infer 时不调用 LLM 抽取事实，而是把非 system 消息原样作为记忆写入。
         if not infer:
-            # 注释：返回 `ed_memories = []` 给调用方。
+            # 逻辑注释：收集本次成功写入的记忆，最后按 API 约定返回给调用方。
             returned_memories = []
-            # 注释：遍历 messages 中的元素，并将当前项赋给 message_dict。
+            # 逻辑注释：raw 模式逐条处理消息，每条有效消息都会成为一条独立记忆。
             for message_dict in messages:
-                # 注释：判断条件 `(` 是否成立。
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if (
+                    # 逻辑注释：raw 模式仍要校验每条消息至少有 role/content，否则无法形成可解释的记忆记录。
                     not isinstance(message_dict, dict)
                     or message_dict.get("role") is None
                     or message_dict.get("content") is None
                 ):
-                    # 注释：输出警告日志。
+                    # 逻辑注释：单条消息格式错误只跳过并告警，不让一个坏消息导致整批写入失败。
                     logger.warning(f"Skipping invalid message format (async): {message_dict}")
-                    # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                     continue
 
-                # 注释：判断条件 `message_dict["role"] == "system"` 是否成立。
+                # 逻辑注释：system 消息通常是指令/上下文，不应作为用户事实或对话记忆存储。
                 if message_dict["role"] == "system":
-                    # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                     continue
 
-                # 注释：深拷贝生成 per_msg_meta 变量，避免修改原始输入对象。
+                # 逻辑注释：每条消息复制一份 metadata，避免给其中一条消息加 role/actor 时影响其他消息。
                 per_msg_meta = deepcopy(metadata)
-                # 注释：计算并保存 per_msg_meta 变量，供后续逻辑使用。
+                # 逻辑注释：把原消息角色写入 metadata，后续读取/搜索时可以知道记忆来自 user 还是 assistant。
                 per_msg_meta["role"] = message_dict["role"]
 
-                # 注释：计算并保存 actor_name 变量，供后续逻辑使用。
+                # 逻辑注释：如果消息带 name，就把它作为 actor_id，支持多人/多角色对话里的说话人过滤。
                 actor_name = message_dict.get("name")
-                # 注释：判断条件 `actor_name` 是否成立。
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if actor_name:
-                    # 注释：计算并保存 per_msg_meta 变量，供后续逻辑使用。
+                    # 逻辑注释：actor_id 写入 metadata 后，后续可以按具体说话人查找或清理记忆。
                     per_msg_meta["actor_id"] = actor_name
 
-                # 注释：计算并保存 msg_content 变量，供后续逻辑使用。
+                # 逻辑注释：raw 模式把原始 content 当成记忆正文，不做 LLM 改写。
                 msg_content = message_dict["content"]
-                # 注释：计算并保存 msg_embeddings 变量，供后续逻辑使用。
+                # 逻辑注释：写向量库前先把文本转成 embedding，后续语义搜索才能召回这条记忆。
                 msg_embeddings = await asyncio.to_thread(self.embedding_model.embed, msg_content, "add")
-                # 注释：计算并保存 mem_id 变量，供后续逻辑使用。
+                # 逻辑注释：统一通过 _create_memory 写入向量库和历史表，避免 raw 模式遗漏审计记录。
                 mem_id = await self._create_memory(msg_content, {msg_content: msg_embeddings}, per_msg_meta)
 
-                # 注释：返回 `ed_memories.append(` 给调用方。
+                # 逻辑注释：把对外需要的 id/memory/event/role 等信息记录下来，作为本次 add 的返回值。
                 returned_memories.append(
                     {
                         "id": mem_id,
@@ -3116,23 +2889,25 @@ class AsyncMemory(MemoryBase):
                         "role": message_dict["role"],
                     }
                 )
-            # 注释：返回 `returned_memories` 给调用方。
+            # 逻辑注释：返回本次实际新增的记忆列表，前面被跳过/去重的内容不会出现在结果里。
             return returned_memories
 
         # === V3 PHASED BATCH PIPELINE (async) ===
 
         # Phase 0: Context gathering
+        # 逻辑注释：把 filters 转成稳定会话 key，用来读取和保存最近消息上下文。
         session_scope = _build_session_scope(effective_filters)
-        # 注释：计算并保存 last_messages 变量，供后续逻辑使用。
+        # 逻辑注释：取最近对话作为 LLM 抽取记忆的上下文，帮助判断新信息是否真的值得写入。
         last_messages = await asyncio.to_thread(self.db.get_last_messages, session_scope, 10)
-        # 注释：计算并保存 parsed_messages 变量，供后续逻辑使用。
+        # 逻辑注释：把 role/content 消息列表整理成 prompt 可读的文本，供 embedding 和 LLM 使用。
         parsed_messages = parse_messages(messages)
 
         # Phase 1: Existing memory retrieval
+        # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
         search_filters = {k: v for k, v in effective_filters.items() if k in ("user_id", "agent_id", "run_id") and v}
-        # 注释：计算并保存 query_embedding 变量，供后续逻辑使用。
+        # 逻辑注释：用当前消息整体作为查询生成 embedding，先召回可能相关的旧记忆。
         query_embedding = await asyncio.to_thread(self.embedding_model.embed, parsed_messages, "search")
-        # 注释：计算并保存 已有记忆检索结果，供后续逻辑使用。
+        # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
         existing_results = await asyncio.to_thread(
             self.vector_store.search,
             query=parsed_messages,
@@ -3142,29 +2917,31 @@ class AsyncMemory(MemoryBase):
         )
 
         # Map UUIDs to integers (anti-hallucination)
+        # 逻辑注释：只把必要的旧记忆文本传给 LLM，减少 prompt 体积和泄漏无关 payload 的风险。
         existing_memories = []
-        # 注释：初始化 uuid_mapping 变量 为空字典，用于后续按键保存数据。
+        # 逻辑注释：真实 UUID 不直接暴露给 LLM，而是映射成短编号，降低模型编造或误改 ID 的概率。
         uuid_mapping = {}
-        # 注释：遍历 enumerate(existing_results) 中的元素，并将当前项赋给 idx, mem。
+        # 逻辑注释：按召回顺序给旧记忆编号，后面 prompt 中使用这些短 ID 引用旧记忆。
         for idx, mem in enumerate(existing_results):
-            # 注释：计算并保存 uuid_mapping 变量，供后续逻辑使用。
+            # 逻辑注释：保存短编号到真实 UUID 的映射，必要时可以把 LLM 的引用还原成真实记忆 ID。
             uuid_mapping[str(idx)] = mem.id
-            # 注释：调用 existing_memories.append 执行对应操作。
+            # 逻辑注释：构造给 LLM 的旧记忆摘要，只保留短 ID 和正文，避免 prompt 复杂化。
             existing_memories.append({"id": str(idx), "text": mem.payload.get("data", "")})
 
         # Phase 2: LLM extraction (single call)
+        # 逻辑注释：只有 agent_id 且没有 user_id 时视为纯 agent 作用域，prompt 会额外强调 agent 语境。
         is_agent_scoped = bool(effective_filters.get("agent_id")) and not effective_filters.get("user_id")
-        # 注释：计算并保存 system_prompt 变量，供后续逻辑使用。
+        # 逻辑注释：使用增量抽取系统提示，目标是只抽取值得长期保存的新事实。
         system_prompt = ADDITIVE_EXTRACTION_PROMPT
-        # 注释：判断条件 `is_agent_scoped` 是否成立。
+        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
         if is_agent_scoped:
-            # 注释：在原有 system_prompt 变量 基础上累加/追加新的内容。
+            # 逻辑注释：agent 作用域下追加语境后缀，让 LLM 按 agent 记忆而不是用户画像来理解对话。
             system_prompt += AGENT_CONTEXT_SUFFIX
 
-        # 注释：计算并保存 custom_instr 变量，供后续逻辑使用。
+        # 逻辑注释：全局自定义指令会在 LLM 抽取记忆时作为默认额外要求。
         custom_instr = prompt or self.custom_instructions
 
-        # 注释：计算并保存 user_prompt 变量，供后续逻辑使用。
+        # 逻辑注释：把旧记忆、新消息、最近上下文和自定义规则合成一个用户 prompt，供 LLM 一次性判断。
         user_prompt = generate_additive_extraction_prompt(
             existing_memories=existing_memories,
             new_messages=parsed_messages,
@@ -3172,9 +2949,8 @@ class AsyncMemory(MemoryBase):
             custom_instructions=custom_instr,
         )
 
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：计算并保存 模型响应，供后续逻辑使用。
+            # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
             response = await asyncio.to_thread(
                 self.llm.generate_response,
                 messages=[
@@ -3183,169 +2959,162 @@ class AsyncMemory(MemoryBase):
                 ],
                 response_format={"type": "json_object"},
             )
-        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
         except Exception as e:
-            # 注释：输出错误日志。
+            # 逻辑注释：抽取失败时记录错误并返回空结果，避免把未理解的文本错误写成记忆。
             logger.error(f"LLM extraction failed (async): {e}")
-            # 注释：返回 `[]` 给调用方。
+            # 逻辑注释：该分支没有产生可写入/可返回的记忆，返回空列表而不是报错。
             return []
 
         # Parse response
         try:
-            # 注释：计算并保存 模型响应，供后续逻辑使用。
+            # 逻辑注释：先去掉 ```json 这类代码块包裹，提升 json.loads 成功率。
             response = remove_code_blocks(response)
-            # 注释：判断条件 `not response or not response.strip()` 是否成立。
+            # 逻辑注释：空响应说明 LLM 没有给出可解析内容，直接视为没有抽到记忆。
             if not response or not response.strip():
-                # 注释：初始化 extracted_memories 变量 为空列表，用于后续收集数据。
+                # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                 extracted_memories = []
-            # 注释：处理前面条件不成立时的默认分支。
             else:
-                # 注释：进入可能抛出异常的代码块。
                 try:
-                    # 注释：计算并保存 extracted_memories 变量，供后续逻辑使用。
+                    # 逻辑注释：按约定读取 JSON 里的 memory 数组，后续每个元素应包含待写入文本。
                     extracted_memories = json.loads(response, strict=False).get("memory", [])
-                # 注释：捕获 json.JSONDecodeError 异常并执行降级或错误处理。
+                # 逻辑注释：LLM 有时不会返回严格 JSON；第一次解析失败后，再尝试从文本中抽取 JSON 片段。
                 except json.JSONDecodeError:
-                    # 注释：计算并保存 extracted_json 变量，供后续逻辑使用。
+                    # 逻辑注释：如果整段不是合法 JSON，就从文本里尽量截取 JSON 片段再解析。
                     extracted_json = extract_json(response)
-                    # 注释：计算并保存 extracted_memories 变量，供后续逻辑使用。
+                    # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                     extracted_memories = json.loads(extracted_json, strict=False).get("memory", [])
-        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
         except Exception as e:
-            # 注释：输出错误日志。
+            # 逻辑注释：解析错误只影响本次抽取结果，不让异常继续破坏调用方流程。
             logger.error(f"Error parsing extraction response (async): {e}")
-            # 注释：初始化 extracted_memories 变量 为空列表，用于后续收集数据。
+            # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
             extracted_memories = []
 
-        # 注释：判断条件 `not extracted_memories` 是否成立。
+        # 逻辑注释：LLM 没抽到长期记忆时仍保存原消息上下文，方便下一次抽取时参考最近对话。
         if not extracted_memories:
-            # 注释：等待异步操作 `asyncio.to_thread(self.db.save_messages, messages, session_scope)` 完成。
+            # 逻辑注释：保存原始消息到历史上下文库，后续 add 可以利用 last_messages 判断记忆变化。
             await asyncio.to_thread(self.db.save_messages, messages, session_scope)
-            # 注释：返回 `[]` 给调用方。
+            # 逻辑注释：该分支没有产生可写入/可返回的记忆，返回空列表而不是报错。
             return []
 
         # Phase 3: Batch embed all extracted memory texts
+        # 逻辑注释：只对非空文本生成 embedding；空文本不会成为记忆，也不浪费 embedding 调用。
         mem_texts = [m.get("text", "") for m in extracted_memories if m.get("text")]
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：计算并保存 mem_embeddings_list 变量，供后续逻辑使用。
+            # 逻辑注释：批量 embedding 能减少 provider 调用次数，是批处理新增记忆的主要性能优化。
             mem_embeddings_list = await asyncio.to_thread(self.embedding_model.embed_batch, mem_texts, "add")
-            # 注释：计算并保存 embed_map 变量，供后续逻辑使用。
+            # 逻辑注释：把文本和 embedding 建成映射，后面构造记录时可以 O(1) 取向量。
             embed_map = dict(zip(mem_texts, mem_embeddings_list))
-        # 注释：捕获 Exception 异常并执行降级或错误处理。
+        # 逻辑注释：这里进入兜底路径，通常会从批量操作退化为逐条处理，提升整体成功率。
         except Exception:
-            # 注释：初始化 embed_map 变量 为空字典，用于后续按键保存数据。
+            # 逻辑注释：批量 embedding 失败后准备逐条兜底，尽量让部分可处理记忆仍能写入。
             embed_map = {}
-            # 注释：遍历 mem_texts 中的元素，并将当前项赋给 text。
+            # 逻辑注释：逐条 embedding 作为降级路径，牺牲性能换取更高的成功率。
             for text in mem_texts:
-                # 注释：进入可能抛出异常的代码块。
                 try:
-                    # 注释：计算并保存 embed_map 变量，供后续逻辑使用。
+                    # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
                     embed_map[text] = await asyncio.to_thread(self.embedding_model.embed, text, "add")
-                # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                 except Exception as e:
-                    # 注释：输出警告日志。
+                    # 逻辑注释：单条文本 embedding 失败只跳过该条，避免整批新增失败。
                     logger.warning(f"Failed to embed memory text (async): {e}")
 
         # Phase 4: Per-memory CPU processing + Phase 5: Hash dedup
+        # 逻辑注释：收集旧记忆的内容哈希，后面用它快速判断是否已经存过完全相同的文本。
         existing_hashes = set()
-        # 注释：遍历 existing_results 中的元素，并将当前项赋给 mem。
+        # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
         for mem in existing_results:
-            # 注释：计算并保存 h 变量，供后续逻辑使用。
+            # 逻辑注释：旧记忆 payload 里的 hash 是去重依据，比直接比较所有文本更稳定高效。
             h = mem.payload.get("hash") if hasattr(mem, "payload") and mem.payload else None
-            # 注释：判断条件 `h` 是否成立。
+            # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
             if h:
-                # 注释：调用 existing_hashes.add 执行对应操作。
                 existing_hashes.add(h)
 
-        # 注释：初始化 待持久化记录列表 为空列表，用于后续收集数据。
+        # 逻辑注释：records 是批量写入的中间结构，集中保存 id、文本、向量和 payload。
         records = []
-        # 注释：初始化 seen_hashes 变量 为空集合，用于后续去重。
+        # 逻辑注释：本批次内部也要去重，避免 LLM 在一次响应里重复抽取同一事实。
         seen_hashes = set()
-        # 注释：遍历 extracted_memories 中的元素，并将当前项赋给 mem。
+        # 逻辑注释：逐条处理 LLM 抽取出的候选记忆，只有通过非空、可 embedding、非重复校验的才会入库。
         for mem in extracted_memories:
-            # 注释：计算并保存 text 变量，供后续逻辑使用。
+            # 逻辑注释：候选记忆以 text 字段为正文；缺失 text 的条目不具备可存储内容。
             text = mem.get("text")
-            # 注释：判断条件 `not text or text not in embed_map` 是否成立。
+            # 逻辑注释：没有正文或没有成功生成 embedding 的候选都会被跳过，保证后面 records 完整可写。
             if not text or text not in embed_map:
-                # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                 continue
 
-            # 注释：计算并保存 mem_hash 变量，供后续逻辑使用。
+            # 逻辑注释：使用文本 MD5 作为内容指纹，用于跨批次和批次内的精确重复检测。
             mem_hash = hashlib.md5(text.encode()).hexdigest()
-            # 注释：判断条件 `mem_hash in existing_hashes or mem_hash in seen_hashes` 是否成立。
+            # 逻辑注释：如果内容哈希已经出现过，就说明是精确重复记忆，跳过以保持记忆库简洁。
             if mem_hash in existing_hashes or mem_hash in seen_hashes:
-                # 注释：输出调试日志。
                 logger.debug(f"Skipping duplicate memory (hash match, async): {text[:50]}")
-                # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                 continue
-            # 注释：调用 seen_hashes.add 执行对应操作。
             seen_hashes.add(mem_hash)
 
-            # 注释：计算并保存 text_lemmatized 变量，供后续逻辑使用。
+            # 逻辑注释：提前保存词形归一化文本，后续关键词检索无需每次重新处理存量记忆。
             text_lemmatized = lemmatize_for_bm25(text)
 
-            # 注释：计算并保存 记忆 ID，供后续逻辑使用。
+            # 逻辑注释：每条记忆用 UUID 作为向量库 ID，保证跨批次新增也不会冲突。
             memory_id = str(uuid.uuid4())
-            # 注释：深拷贝生成 mem_metadata 变量，避免修改原始输入对象。
+            # 逻辑注释：每条候选记忆都复制一份基础 metadata，再补充该记忆自己的 data/hash/time 等字段。
             mem_metadata = deepcopy(metadata)
-            # 注释：计算并保存 mem_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：记忆正文放入 payload 的 data 字段，读取和搜索结果格式化都从这里取文本。
             mem_metadata["data"] = text
-            # 注释：计算并保存 mem_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：把 BM25 用的归一化文本一起存进 payload，服务混合检索。
             mem_metadata["text_lemmatized"] = text_lemmatized
-            # 注释：计算并保存 mem_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：hash 存入 payload，后续新增时能用旧 hash 快速去重。
             mem_metadata["hash"] = mem_hash
-            # 注释：判断条件 `"created_at" not in mem_metadata` 是否成立。
+            # 逻辑注释：调用方没有提供创建时间时，使用当前 UTC 时间作为记忆创建时间。
             if "created_at" not in mem_metadata:
-                # 注释：计算并保存 mem_metadata 变量，供后续逻辑使用。
+                # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                 mem_metadata["created_at"] = datetime.now(timezone.utc).isoformat()
-            # 注释：计算并保存 mem_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：新增时更新时间等于创建时间，后续 update 才会改变 updated_at。
             mem_metadata["updated_at"] = mem_metadata["created_at"]
-            # 注释：判断条件 `mem.get("attributed_to")` 是否成立。
+            # 逻辑注释：LLM 如果标出事实归属，就把 attributed_to 写入 payload，便于区分事实属于谁。
             if mem.get("attributed_to"):
-                # 注释：计算并保存 mem_metadata 变量，供后续逻辑使用。
+                # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                 mem_metadata["attributed_to"] = mem["attributed_to"]
 
-            # 注释：调用 records.append 执行对应操作。
+            # 逻辑注释：通过 records 聚合写入所需的四元组，后续向量插入、历史记录、实体链接都复用它。
             records.append((memory_id, text, embed_map[text], mem_metadata))
 
-        # 注释：判断条件 `not records` 是否成立。
+        # 逻辑注释：所有候选都被过滤/去重后，只保存上下文消息，不向向量库写任何新记忆。
         if not records:
-            # 注释：等待异步操作 `asyncio.to_thread(self.db.save_messages, messages, session_scope)` 完成。
+            # 逻辑注释：保存原始消息到历史上下文库，后续 add 可以利用 last_messages 判断记忆变化。
             await asyncio.to_thread(self.db.save_messages, messages, session_scope)
-            # 注释：返回 `[]` 给调用方。
+            # 逻辑注释：该分支没有产生可写入/可返回的记忆，返回空列表而不是报错。
             return []
 
         # Phase 6: Batch persist
+        # 逻辑注释：从 records 拆出向量列表，供向量库批量 insert。
         all_vectors = [r[2] for r in records]
-        # 注释：计算并保存 all_ids 变量，供后续逻辑使用。
+        # 逻辑注释：从 records 拆出 ID 列表，和向量列表一一对应。
         all_ids = [r[0] for r in records]
-        # 注释：计算并保存 all_payloads 变量，供后续逻辑使用。
+        # 逻辑注释：从 records 拆出 payload 列表，写入后读取/过滤/关键词检索都依赖这些字段。
         all_payloads = [r[3] for r in records]
 
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：等待异步操作 `asyncio.to_thread(` 完成。
+            # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
             await asyncio.to_thread(
                 self.vector_store.insert,
                 vectors=all_vectors,
                 ids=all_ids,
                 payloads=all_payloads,
             )
-        # 注释：捕获 Exception 异常并执行降级或错误处理。
+        # 逻辑注释：这里进入兜底路径，通常会从批量操作退化为逐条处理，提升整体成功率。
         except Exception:
-            # 注释：遍历 zip(all_ids, all_vectors, all_payloads) 中的元素，并将当前项赋给 mid, vec, pay。
+            # 逻辑注释：批量插入失败后逐条重试，让部分记忆仍有机会写入成功。
             for mid, vec, pay in zip(all_ids, all_vectors, all_payloads):
-                # 注释：进入可能抛出异常的代码块。
                 try:
-                    # 注释：等待异步操作 `asyncio.to_thread(self.vector_store.insert, vectors=[vec], ids=[mid], payload...` 完成。
+                    # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
                     await asyncio.to_thread(self.vector_store.insert, vectors=[vec], ids=[mid], payloads=[pay])
-                # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                 except Exception as e:
-                    # 注释：输出错误日志。
+                    # 逻辑注释：逐条插入失败才记录错误；这个错误只影响对应 memory_id。
                     logger.error(f"Failed to insert memory {mid} (async): {e}")
 
         # Batch history
+        # 逻辑注释：为每条新增记忆准备历史记录，保证向量库写入后也有可审计的 ADD 事件。
         history_records = [
             {
                 "memory_id": r[0],
@@ -3355,92 +3124,91 @@ class AsyncMemory(MemoryBase):
                 "created_at": r[3].get("created_at"),
                 "is_deleted": 0,
             }
+            # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
             for r in records
         ]
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：等待异步操作 `asyncio.to_thread(self.db.batch_add_history, history_records)` 完成。
+            # 逻辑注释：优先批量写历史，和批量插入一样减少数据库调用。
             await asyncio.to_thread(self.db.batch_add_history, history_records)
-        # 注释：捕获 Exception 异常并执行降级或错误处理。
+        # 逻辑注释：这里进入兜底路径，通常会从批量操作退化为逐条处理，提升整体成功率。
         except Exception:
-            # 注释：遍历 history_records 中的元素，并将当前项赋给 hr。
+            # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
             for hr in history_records:
-                # 注释：进入可能抛出异常的代码块。
                 try:
-                    # 注释：等待异步操作 `asyncio.to_thread(` 完成。
+                    # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
                     await asyncio.to_thread(
+                        # 逻辑注释：批量写历史失败后逐条补写，避免完全丢失审计记录。
                         self.db.add_history, hr["memory_id"], None, hr["new_memory"], "ADD",
                         created_at=hr.get("created_at")
                     )
-                # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                 except Exception as e:
-                    # 注释：输出错误日志。
                     logger.error(f"Failed to add history for {hr['memory_id']} (async): {e}")
 
         # Phase 7: Batch entity linking
         try:
-            # 注释：计算并保存 all_texts 变量，供后续逻辑使用。
+            # 逻辑注释：实体抽取只需要记忆文本，因此从 records 中取出所有文本做批处理。
             all_texts = [r[1] for r in records]
-            # 注释：计算并保存 all_entities 变量，供后续逻辑使用。
+            # 逻辑注释：从记忆文本抽取实体，只有抽到实体才需要进入实体链接流程。
             all_entities = await asyncio.to_thread(extract_entities_batch, all_texts)
 
             # 7a: Global dedup
+            # 逻辑注释：全局实体表把同批次重复实体合并，并记录它关联的所有 memory_id。
             global_entities = {}
-            # 注释：遍历 enumerate(records) 中的元素，并将当前项赋给 idx, (memory_id, text, embedding, payload)。
+            # 逻辑注释：按 records 顺序把每条记忆和对应实体列表对齐，建立实体到记忆的关系。
             for idx, (memory_id, text, embedding, payload) in enumerate(records):
-                # 注释：计算并保存 entities 变量，供后续逻辑使用。
+                # 逻辑注释：如果批量抽取结果长度不完全匹配，就给缺失项空实体列表，避免越界。
                 entities = all_entities[idx] if idx < len(all_entities) else []
-                # 注释：遍历 entities 中的元素，并将当前项赋给 entity_type, entity_text。
+                # 逻辑注释：逐个处理抽取出的实体，把每个实体都链接到当前记忆。
                 for entity_type, entity_text in entities:
-                    # 注释：计算并保存 key 变量，供后续逻辑使用。
+                    # 逻辑注释：实体去重用小写+去空白后的规范 key，降低大小写和首尾空格带来的重复。
                     key = entity_text.strip().lower()
-                    # 注释：判断条件 `key in global_entities` 是否成立。
+                    # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                     if key in global_entities:
-                        # 注释：执行当前语句，推进该函数的业务流程。
+                        # 逻辑注释：同一实体已出现时只追加新的 memory_id，不重复保存实体文本。
                         global_entities[key][2].add(memory_id)
-                    # 注释：处理前面条件不成立时的默认分支。
                     else:
-                        # 注释：计算并保存 global_entities 变量，供后续逻辑使用。
+                        # 逻辑注释：首次遇到实体时保存类型、原文和关联 memory_id 集合，后续用于批量查重/插入。
                         global_entities[key] = [entity_type, entity_text, {memory_id}]
 
-            # 注释：判断条件 `global_entities` 是否成立。
+            # 逻辑注释：只有抽到至少一个实体时才进入实体库流程，避免无意义的 embedding/search。
             if global_entities:
-                # 注释：计算并保存 ordered_keys 变量，供后续逻辑使用。
+                # 逻辑注释：固定实体处理顺序，方便 entity_texts、embeddings 和后续结果按索引对齐。
                 ordered_keys = list(global_entities.keys())
-                # 注释：计算并保存 entity_texts 变量，供后续逻辑使用。
+                # 逻辑注释：只把实体原文送去 embedding，类型和关联记忆保留在 global_entities 里。
                 entity_texts = [global_entities[k][1] for k in ordered_keys]
 
                 # 7b: Batch embed entities
                 try:
-                    # 注释：计算并保存 entity_embeddings 变量，供后续逻辑使用。
+                    # 逻辑注释：唯一实体批量 embedding，避免同一个实体在一批记忆中重复计算。
                     entity_embeddings = await asyncio.to_thread(self.embedding_model.embed_batch, entity_texts, "add")
-                # 注释：捕获 Exception 异常并执行降级或错误处理。
+                # 逻辑注释：这里进入兜底路径，通常会从批量操作退化为逐条处理，提升整体成功率。
                 except Exception:
-                    # 注释：初始化 entity_embeddings 变量 为空列表，用于后续收集数据。
+                    # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                     entity_embeddings = []
-                    # 注释：遍历 entity_texts 中的元素，并将当前项赋给 t。
+                    # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
                     for t in entity_texts:
-                        # 注释：进入可能抛出异常的代码块。
                         try:
-                            # 注释：调用 entity_embeddings.append 执行对应操作。
+                            # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
                             entity_embeddings.append(await asyncio.to_thread(self.embedding_model.embed, t, "add"))
-                        # 注释：捕获 Exception 异常并执行降级或错误处理。
+                        # 逻辑注释：这里进入兜底路径，通常会从批量操作退化为逐条处理，提升整体成功率。
                         except Exception:
-                            # 注释：调用 entity_embeddings.append 执行对应操作。
+                            # 逻辑注释：单个实体 embedding 失败时用 None 占位，保持索引对齐并在后面过滤掉。
                             entity_embeddings.append(None)
 
-                # 注释：计算并保存 valid 变量，供后续逻辑使用。
+                # 逻辑注释：过滤掉 embedding 失败的实体，只对有向量的实体做实体库检索。
                 valid = [(i, k) for i, k in enumerate(ordered_keys) if entity_embeddings[i] is not None]
-                # 注释：判断条件 `valid` 是否成立。
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if valid:
-                    # 注释：为 `valid_indices, valid_keys` 赋值，准备后续处理所需的数据。
+                    # 逻辑注释：拆出有效实体的原始索引和 key，便于同时访问 embedding 和实体元数据。
                     valid_indices, valid_keys = zip(*valid)
-                    # 注释：计算并保存 valid_vectors 变量，供后续逻辑使用。
+                    # 逻辑注释：有效实体向量按 valid_keys 顺序排列，后续 search_batch 的返回也按这个顺序对齐。
                     valid_vectors = [entity_embeddings[i] for i in valid_indices]
 
                     # 7c: Batch search for existing entities
+                    # 逻辑注释：有效实体文本和向量一起传给批量搜索，用于判断实体是否已存在。
                     valid_texts = [global_entities[k][1] for k in valid_keys]
-                    # 注释：计算并保存 existing_matches 变量，供后续逻辑使用。
+                    # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
                     existing_matches = await asyncio.to_thread(
                         self.entity_store.search_batch,
                         queries=valid_texts,
@@ -3450,46 +3218,42 @@ class AsyncMemory(MemoryBase):
                     )
 
                     # 7d: Separate into inserts vs updates
+                    # 逻辑注释：把需要新建的实体先暂存在列表里，最后统一批量 insert。
                     to_insert_vectors, to_insert_ids, to_insert_payloads = [], [], []
-                    # 注释：遍历 enumerate(valid_keys) 中的元素，并将当前项赋给 j, key。
+                    # 逻辑注释：逐个有效实体根据搜索结果决定更新已有实体还是加入新建列表。
                     for j, key in enumerate(valid_keys):
-                        # 注释：为 `entity_type, entity_text, memory_ids` 赋值，准备后续处理所需的数据。
+                        # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                         entity_type, entity_text, memory_ids = global_entities[key]
-                        # 注释：计算并保存 matches 变量，供后续逻辑使用。
+                        # 逻辑注释：搜索结果按实体顺序对齐；缺失时按空列表处理，表示没有匹配实体。
                         matches = existing_matches[j] if j < len(existing_matches) else []
 
-                        # 注释：判断条件 `matches and matches[0].score >= 0.95` 是否成立。
+                        # 逻辑注释：高度相似才认为是同一实体，避免实体索引过度合并。
                         if matches and matches[0].score >= 0.95:
-                            # 注释：计算并保存 match 变量，供后续逻辑使用。
+                            # 逻辑注释：这里保存该阶段的中间结果，供后续抽取、去重、批量写入或返回结果复用。
                             match = matches[0]
-                            # 注释：计算并保存 向量库载荷数据，供后续逻辑使用。
                             payload = match.payload or {}
-                            # 注释：计算并保存 linked 变量，供后续逻辑使用。
+                            # 逻辑注释：用 set 合并已有链接和本批新链接，天然去重。
                             linked = set(payload.get("linked_memory_ids", []))
-                            # 注释：计算并保存 linked 变量，供后续逻辑使用。
+                            # 逻辑注释：把本批中关联该实体的所有 memory_id 合并进已有实体链接。
                             linked |= memory_ids
-                            # 注释：计算并保存 向量库载荷数据，供后续逻辑使用。
+                            # 逻辑注释：排序后写回 payload，让结果稳定，也便于调试比较。
                             payload["linked_memory_ids"] = sorted(linked)
-                            # 注释：进入可能抛出异常的代码块。
                             try:
-                                # 注释：等待异步操作 `asyncio.to_thread(` 完成。
+                                # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
                                 await asyncio.to_thread(
                                     self.entity_store.update,
                                     vector_id=match.id,
                                     vector=None,
                                     payload=payload,
                                 )
-                            # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                            # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                             except Exception as e:
-                                # 注释：输出调试日志。
                                 logger.debug(f"Entity update failed for '{entity_text}' (async): {e}")
-                        # 注释：处理前面条件不成立时的默认分支。
                         else:
-                            # 注释：调用 to_insert_vectors.append 执行对应操作。
+                            # 逻辑注释：没有匹配实体时，把该实体加入待插入集合，稍后统一写入。
                             to_insert_vectors.append(valid_vectors[j])
-                            # 注释：调用 to_insert_ids.append 执行对应操作。
                             to_insert_ids.append(str(uuid.uuid4()))
-                            # 注释：调用 to_insert_payloads.append 执行对应操作。
+                            # 逻辑注释：新实体 payload 带上实体信息、关联记忆和 session filters，支持后续增强检索和清理。
                             to_insert_payloads.append({
                                 "data": entity_text,
                                 "entity_type": entity_type,
@@ -3498,46 +3262,48 @@ class AsyncMemory(MemoryBase):
                             })
 
                     # 7e: Batch insert new entities
+                    # 逻辑注释：只有存在新实体时才调用 insert，避免空批次触发某些向量库异常。
                     if to_insert_vectors:
-                        # 注释：进入可能抛出异常的代码块。
                         try:
-                            # 注释：等待异步操作 `asyncio.to_thread(` 完成。
+                            # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
                             await asyncio.to_thread(
                                 self.entity_store.insert,
                                 vectors=to_insert_vectors,
                                 ids=to_insert_ids,
                                 payloads=to_insert_payloads,
                             )
-                        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+                        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
                         except Exception as e:
-                            # 注释：输出警告日志。
+                            # 逻辑注释：批量实体插入失败不影响已写入的记忆，只记录警告供排查。
                             logger.warning(f"Batch entity insert failed (async): {e}")
-        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
         except Exception as e:
-            # 注释：输出警告日志。
+            # 逻辑注释：实体链接属于增强能力，失败时不回滚主记忆写入。
             logger.warning(f"Batch entity linking failed (async): {e}")
 
         # Phase 8: Save messages + return
+        # 逻辑注释：保存原始消息到历史上下文库，后续 add 可以利用 last_messages 判断记忆变化。
         await asyncio.to_thread(self.db.save_messages, messages, session_scope)
 
-        # 注释：返回 `ed_memories = [` 给调用方。
         returned_memories = [
             {"id": r[0], "memory": r[1], "event": "ADD"}
+            # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
             for r in records
         ]
 
-        # 注释：为 `keys, encoded_ids` 赋值，准备后续处理所需的数据。
+        # 逻辑注释：遥测前对 filters 做脱敏/编码，只上报维度信息而不是原始实体 ID。
         keys, encoded_ids = process_telemetry_filters(effective_filters)
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event(
             "mem0.add",
             self,
+            # 逻辑注释：保存 API 版本，遥测事件会带上它，便于区分不同版本的行为。
             {"version": self.api_version, "keys": keys, "encoded_ids": encoded_ids, "sync_type": "async"},
         )
-        # 注释：返回 `returned_memories` 给调用方。
+        # 逻辑注释：返回本次实际新增的记忆列表，前面被跳过/去重的内容不会出现在结果里。
         return returned_memories
 
-    # 注释：按 ID 读取单条记忆。
+    # 逻辑注释：按 memory_id 读取单条记忆，并把系统字段和自定义 metadata 整理成对外稳定的返回结构。
     async def get(self, memory_id):
         """
         Retrieve a memory by ID asynchronously.
@@ -3548,16 +3314,16 @@ class AsyncMemory(MemoryBase):
         Returns:
             dict: Retrieved memory.
         """
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event("mem0.get", self, {"memory_id": memory_id, "sync_type": "async"})
-        # 注释：计算并保存 记忆内容，供后续逻辑使用。
+        # 逻辑注释：通过向量库 ID 直接取 payload，这是 get/update/delete 的基础读取路径。
         memory = await asyncio.to_thread(self.vector_store.get, vector_id=memory_id)
-        # 注释：判断条件 `not memory` 是否成立。
+        # 逻辑注释：向量库没有返回记录时表示 memory_id 不存在，get 用 None 表达未找到。
         if not memory:
-            # 注释：返回 `None` 给调用方。
+            # 逻辑注释：没有可用结果时显式返回 None，让调用方能区分“没找到”和异常。
             return None
 
-        # 注释：计算并保存 需要提升到返回顶层的载荷字段，供后续逻辑使用。
+        # 逻辑注释：这些 payload 字段是常用作用域/来源信息，返回时提升到顶层，调用方读取更方便。
         promoted_payload_keys = [
             "user_id",
             "agent_id",
@@ -3566,10 +3332,10 @@ class AsyncMemory(MemoryBase):
             "role",
         ]
 
-        # 注释：计算并保存 核心字段和已提升字段集合，供后续逻辑使用。
+        # 逻辑注释：核心字段和已提升字段不再放进 metadata，避免结果里重复出现同一信息。
         core_and_promoted_keys = {"data", "hash", "created_at", "updated_at", "id", "text_lemmatized", "attributed_to", *promoted_payload_keys}
 
-        # 注释：计算并保存 result_item 变量，供后续逻辑使用。
+        # 逻辑注释：用 MemoryItem 统一字段名和序列化形态，屏蔽不同向量库返回对象的差异。
         result_item = MemoryItem(
             id=memory.id,
             memory=memory.payload.get("data", ""),
@@ -3578,24 +3344,24 @@ class AsyncMemory(MemoryBase):
             updated_at=memory.payload.get("updated_at"),
         ).model_dump()
 
-        # 注释：遍历 promoted_payload_keys 中的元素，并将当前项赋给 key。
+        # 逻辑注释：遍历可提升字段，只有 payload 里真的存在时才加入返回结果。
         for key in promoted_payload_keys:
-            # 注释：判断条件 `key in memory.payload` 是否成立。
+            # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
             if key in memory.payload:
-                # 注释：计算并保存 result_item 变量，供后续逻辑使用。
+                # 逻辑注释：把作用域/角色字段放到结果顶层，方便用户直接过滤或展示。
                 result_item[key] = memory.payload[key]
 
-        # 注释：计算并保存 额外元数据，供后续逻辑使用。
+        # 逻辑注释：除系统字段外的 payload 都视为用户自定义 metadata，保留在 metadata 子对象里。
         additional_metadata = {k: v for k, v in memory.payload.items() if k not in core_and_promoted_keys}
-        # 注释：判断条件 `additional_metadata` 是否成立。
+        # 逻辑注释：只有存在额外 metadata 时才添加 metadata 字段，保持返回结构简洁。
         if additional_metadata:
-            # 注释：计算并保存 result_item 变量，供后续逻辑使用。
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             result_item["metadata"] = additional_metadata
 
-        # 注释：返回 `result_item` 给调用方。
+        # 逻辑注释：返回已经格式化过的结果，调用方无需理解向量库原始 payload 结构。
         return result_item
 
-    # 注释：按照过滤条件列出记忆。
+    # 逻辑注释：列出某个作用域下的记忆；先校验 filters/top_k，再委托向量库 list 并格式化结果。
     async def get_all(
         self,
         *,
@@ -3621,80 +3387,86 @@ class AsyncMemory(MemoryBase):
                 or if top_k is invalid.
         """
         # Reject top-level entity params - must use filters instead
+        # 逻辑注释：兼容性层面拒绝 user_id 等顶层参数，统一要求调用方通过 filters 指定作用域。
         _reject_top_level_entity_params(kwargs, "get_all")
 
         # Validate top_k
+        # 逻辑注释：在触达向量库前校验 top_k/threshold，错误更早、更清晰。
         _validate_search_params(top_k=top_k)
 
         # Validate and trim entity IDs in filters
+        # 逻辑注释：复制 filters 后再修改，避免 trim 或高级过滤转换影响调用方原对象。
         effective_filters = dict(filters) if filters else {}
-        # 注释：判断条件 `"user_id" in effective_filters` 是否成立。
+        # 逻辑注释：如果 filters 里包含实体 ID，就先做同样的清洗校验，保证查询作用域格式正确。
         if "user_id" in effective_filters:
-            # 注释：计算并保存 规范化后的过滤条件，供后续逻辑使用。
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             effective_filters["user_id"] = _validate_and_trim_entity_id(
                 effective_filters["user_id"], "user_id"
             )
-        # 注释：判断条件 `"agent_id" in effective_filters` 是否成立。
+        # 逻辑注释：如果 filters 里包含实体 ID，就先做同样的清洗校验，保证查询作用域格式正确。
         if "agent_id" in effective_filters:
-            # 注释：计算并保存 规范化后的过滤条件，供后续逻辑使用。
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             effective_filters["agent_id"] = _validate_and_trim_entity_id(
                 effective_filters["agent_id"], "agent_id"
             )
-        # 注释：判断条件 `"run_id" in effective_filters` 是否成立。
+        # 逻辑注释：如果 filters 里包含实体 ID，就先做同样的清洗校验，保证查询作用域格式正确。
         if "run_id" in effective_filters:
-            # 注释：计算并保存 规范化后的过滤条件，供后续逻辑使用。
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             effective_filters["run_id"] = _validate_and_trim_entity_id(
                 effective_filters["run_id"], "run_id"
             )
 
         # Validate filters contains at least one entity ID
+        # 逻辑注释：读取/搜索必须至少限定一个实体作用域，防止默认扫描整个记忆库。
         if not any(key in effective_filters for key in ("user_id", "agent_id", "run_id")):
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError(
                 "filters must contain at least one of: user_id, agent_id, run_id. "
+                # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
                 "Example: filters={'user_id': 'u1'}"
             )
 
-        # 注释：计算并保存 limit 变量，供后续逻辑使用。
+        # 逻辑注释：内部统一用 limit 表示最终返回条数，和向量库参数命名保持一致。
         limit = top_k
 
-        # 注释：为 `keys, encoded_ids` 赋值，准备后续处理所需的数据。
+        # 逻辑注释：遥测前对 filters 做脱敏/编码，只上报维度信息而不是原始实体 ID。
         keys, encoded_ids = process_telemetry_filters(effective_filters)
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event(
             "mem0.get_all", self, {"limit": limit, "keys": keys, "encoded_ids": encoded_ids, "sync_type": "async"}
         )
 
-        # 注释：计算并保存 all_memories_result 变量，供后续逻辑使用。
+        # 逻辑注释：实际 list 和格式化下沉到 helper，get_all 本身只处理校验和返回包装。
         all_memories_result = await self._get_all_from_vector_store(effective_filters, limit)
 
-        # 注释：返回 `{"results": all_memories_result}` 给调用方。
+        # 逻辑注释：对外统一用 results 包一层，保持 add/search/get_all 等接口返回结构一致。
         return {"results": all_memories_result}
 
-    # 注释：从向量库中读取并格式化多条记忆。
+    # 逻辑注释：兼容不同向量库 list 返回结构，统一展开为 MemoryItem 列表，同时保留额外 metadata。
     async def _get_all_from_vector_store(self, filters, limit):
-        # 注释：计算并保存 memories_result 变量，供后续逻辑使用。
+        # 逻辑注释：按 filters 从向量库列出记忆，top_k/limit 控制最多返回多少条。
         memories_result = await asyncio.to_thread(self.vector_store.list, filters=filters, top_k=limit)
 
         # Handle different vector store return formats by inspecting first element
+        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
         if isinstance(memories_result, (tuple, list)) and len(memories_result) > 0:
-            # 注释：计算并保存 first_element 变量，供后续逻辑使用。
+            # 逻辑注释：检查第一个元素的类型，用来判断向量库返回的是嵌套列表还是扁平列表。
             first_element = memories_result[0]
 
             # If first element is a container, unwrap one level
+            # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
             if isinstance(first_element, (list, tuple)):
-                # 注释：计算并保存 actual_memories 变量，供后续逻辑使用。
+                # 逻辑注释：如果第一层包了一层列表，就展开一层得到真正的记忆对象列表。
                 actual_memories = first_element
-            # 注释：处理前面条件不成立时的默认分支。
             else:
                 # First element is a memory object, structure is already flat
+                # 逻辑注释：如果返回已经是扁平结构，就直接使用，不做额外变换。
                 actual_memories = memories_result
-        # 注释：处理前面条件不成立时的默认分支。
         else:
-            # 注释：计算并保存 actual_memories 变量，供后续逻辑使用。
+            # 逻辑注释：如果返回已经是扁平结构，就直接使用，不做额外变换。
             actual_memories = memories_result
 
-        # 注释：计算并保存 需要提升到返回顶层的载荷字段，供后续逻辑使用。
+        # 逻辑注释：这些 payload 字段是常用作用域/来源信息，返回时提升到顶层，调用方读取更方便。
         promoted_payload_keys = [
             "user_id",
             "agent_id",
@@ -3702,43 +3474,43 @@ class AsyncMemory(MemoryBase):
             "actor_id",
             "role",
         ]
-        # 注释：计算并保存 核心字段和已提升字段集合，供后续逻辑使用。
+        # 逻辑注释：核心字段和已提升字段不再放进 metadata，避免结果里重复出现同一信息。
         core_and_promoted_keys = {"data", "hash", "created_at", "updated_at", "id", "text_lemmatized", "attributed_to", *promoted_payload_keys}
 
-        # 注释：初始化 formatted_memories 变量 为空列表，用于后续收集数据。
+        # 逻辑注释：统一把向量库对象转换成 SDK 对外返回的字典列表。
         formatted_memories = []
-        # 注释：遍历 actual_memories 中的元素，并将当前项赋给 mem。
+        # 逻辑注释：逐条格式化记忆对象，处理字段提升和额外 metadata。
         for mem in actual_memories:
-            # 注释：计算并保存 格式化后的记忆字典，供后续逻辑使用。
+            # 逻辑注释：用 MemoryItem 统一字段名和序列化形态，屏蔽不同向量库返回对象的差异。
             memory_item_dict = MemoryItem(
                 id=mem.id,
                 memory=mem.payload.get("data", ""),
                 hash=mem.payload.get("hash"),
                 created_at=mem.payload.get("created_at"),
                 updated_at=mem.payload.get("updated_at"),
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             ).model_dump(exclude={"score"})
 
-            # 注释：遍历 promoted_payload_keys 中的元素，并将当前项赋给 key。
+            # 逻辑注释：遍历可提升字段，只有 payload 里真的存在时才加入返回结果。
             for key in promoted_payload_keys:
-                # 注释：判断条件 `key in mem.payload` 是否成立。
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if key in mem.payload:
-                    # 注释：计算并保存 格式化后的记忆字典，供后续逻辑使用。
+                    # 逻辑注释：把作用域/角色字段放到结果顶层，方便用户直接过滤或展示。
                     memory_item_dict[key] = mem.payload[key]
 
-            # 注释：计算并保存 额外元数据，供后续逻辑使用。
+            # 逻辑注释：除系统字段外的 payload 都视为用户自定义 metadata，保留在 metadata 子对象里。
             additional_metadata = {k: v for k, v in mem.payload.items() if k not in core_and_promoted_keys}
-            # 注释：判断条件 `additional_metadata` 是否成立。
+            # 逻辑注释：只有存在额外 metadata 时才添加 metadata 字段，保持返回结构简洁。
             if additional_metadata:
-                # 注释：计算并保存 格式化后的记忆字典，供后续逻辑使用。
+                # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
                 memory_item_dict["metadata"] = additional_metadata
 
-            # 注释：调用 formatted_memories.append 执行对应操作。
             formatted_memories.append(memory_item_dict)
 
-        # 注释：返回 `formatted_memories` 给调用方。
+        # 逻辑注释：返回已经格式化过的结果，调用方无需理解向量库原始 payload 结构。
         return formatted_memories
 
-    # 注释：根据查询文本搜索相关记忆。
+    # 逻辑注释：搜索入口负责校验和预处理 filters，再调用混合检索；可选 rerank 会在初排结果上二次排序。
     async def search(
         self,
         query: str,
@@ -3787,68 +3559,76 @@ class AsyncMemory(MemoryBase):
                 or if threshold/top_k values are invalid.
         """
         # Reject top-level entity params - must use filters instead
+        # 逻辑注释：兼容性层面拒绝 user_id 等顶层参数，统一要求调用方通过 filters 指定作用域。
         _reject_top_level_entity_params(kwargs, "search")
 
         # Validate search parameters (before applying defaults)
+        # 逻辑注释：在触达向量库前校验 top_k/threshold，错误更早、更清晰。
         _validate_search_params(threshold=threshold, top_k=top_k)
 
         # Validate and trim entity IDs in filters
+        # 逻辑注释：复制 filters 后再修改，避免 trim 或高级过滤转换影响调用方原对象。
         effective_filters = filters.copy() if filters else {}
-        # 注释：判断条件 `"user_id" in effective_filters` 是否成立。
+        # 逻辑注释：如果 filters 里包含实体 ID，就先做同样的清洗校验，保证查询作用域格式正确。
         if "user_id" in effective_filters:
-            # 注释：计算并保存 规范化后的过滤条件，供后续逻辑使用。
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             effective_filters["user_id"] = _validate_and_trim_entity_id(
                 effective_filters["user_id"], "user_id"
             )
-        # 注释：判断条件 `"agent_id" in effective_filters` 是否成立。
+        # 逻辑注释：如果 filters 里包含实体 ID，就先做同样的清洗校验，保证查询作用域格式正确。
         if "agent_id" in effective_filters:
-            # 注释：计算并保存 规范化后的过滤条件，供后续逻辑使用。
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             effective_filters["agent_id"] = _validate_and_trim_entity_id(
                 effective_filters["agent_id"], "agent_id"
             )
-        # 注释：判断条件 `"run_id" in effective_filters` 是否成立。
+        # 逻辑注释：如果 filters 里包含实体 ID，就先做同样的清洗校验，保证查询作用域格式正确。
         if "run_id" in effective_filters:
-            # 注释：计算并保存 规范化后的过滤条件，供后续逻辑使用。
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             effective_filters["run_id"] = _validate_and_trim_entity_id(
                 effective_filters["run_id"], "run_id"
             )
 
         # Validate filters contains at least one entity ID
+        # 逻辑注释：读取/搜索必须至少限定一个实体作用域，防止默认扫描整个记忆库。
         if not any(key in effective_filters for key in ("user_id", "agent_id", "run_id")):
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError(
                 "filters must contain at least one of: user_id, agent_id, run_id. "
+                # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
                 "Example: filters={'user_id': 'u1'}"
             )
 
-        # 注释：计算并保存 limit 变量，供后续逻辑使用。
+        # 逻辑注释：内部统一用 limit 表示最终返回条数，和向量库参数命名保持一致。
         limit = top_k
 
         # Apply enhanced metadata filtering if advanced operators are detected
+        # 逻辑注释：检测到高级过滤语法时先转换成向量库兼容格式，否则简单 filters 直接透传。
         if self._has_advanced_operators(effective_filters):
-            # 注释：计算并保存 处理后的过滤条件，供后续逻辑使用。
+            # 逻辑注释：把 AND/OR/NOT、比较操作符等高级语义转换成内部统一表达。
             processed_filters = self._process_metadata_filters(effective_filters)
             # Remove logical/operator keys that have been reprocessed
+            # 逻辑注释：转换后移除原始逻辑操作符，避免同一个条件被同时以新旧两种格式传给向量库。
             for logical_key in ("AND", "OR", "NOT"):
-                # 注释：调用 effective_filters.pop 执行对应操作。
+                # 逻辑注释：已被转换的复杂字段从原 filters 删除，保持最终 filters 只有向量库能理解的结构。
                 effective_filters.pop(logical_key, None)
-            # 注释：遍历 list(effective_filters.keys()) 中的元素，并将当前项赋给 fk。
+            # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
             for fk in list(effective_filters.keys()):
-                # 注释：判断条件 `fk not in ("AND", "OR", "NOT", "user_id", "agent_id", "run_id") and isinstanc...` 是否成立。
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if fk not in ("AND", "OR", "NOT", "user_id", "agent_id", "run_id") and isinstance(effective_filters.get(fk), dict):
-                    # 注释：调用 effective_filters.pop 执行对应操作。
+                    # 逻辑注释：已被转换的复杂字段从原 filters 删除，保持最终 filters 只有向量库能理解的结构。
                     effective_filters.pop(fk, None)
-            # 注释：调用 effective_filters.update 执行对应操作。
+            # 逻辑注释：把转换后的高级过滤条件合并回有效 filters，后续检索统一使用这份结果。
             effective_filters.update(processed_filters)
 
-        # 注释：为 `keys, encoded_ids` 赋值，准备后续处理所需的数据。
+        # 逻辑注释：遥测前对 filters 做脱敏/编码，只上报维度信息而不是原始实体 ID。
         keys, encoded_ids = process_telemetry_filters(effective_filters)
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event(
             "mem0.search",
             self,
             {
                 "limit": limit,
+                # 逻辑注释：保存 API 版本，遥测事件会带上它，便于区分不同版本的行为。
                 "version": self.api_version,
                 "keys": keys,
                 "encoded_ids": encoded_ids,
@@ -3858,28 +3638,30 @@ class AsyncMemory(MemoryBase):
             },
         )
 
-        # 注释：计算并保存 original_memories 变量，供后续逻辑使用。
+        # 逻辑注释：底层搜索会完成语义、关键词、实体增强的融合排序，search 入口只负责调用。
         original_memories = await self._search_vector_store(query, effective_filters, limit, threshold)
 
         # Apply reranking if enabled and reranker is available
+        # 逻辑注释：只有用户开启 rerank、实例也配置了 reranker 且已有初排结果时才做二次排序。
         if rerank and self.reranker and original_memories:
-            # 注释：进入可能抛出异常的代码块。
             try:
                 # Run reranking in thread pool to avoid blocking async loop
+                # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
                 reranked_memories = await asyncio.to_thread(
+                    # 逻辑注释：reranker 根据原始 query 对候选记忆重新排序，通常能提升相关性但会增加成本。
                     self.reranker.rerank, query, original_memories, limit
                 )
-                # 注释：计算并保存 original_memories 变量，供后续逻辑使用。
+                # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
                 original_memories = reranked_memories
-            # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+            # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
             except Exception as e:
-                # 注释：输出警告日志。
+                # 逻辑注释：重排失败不影响搜索可用性，直接退回初排结果。
                 logger.warning(f"Reranking failed, using original results: {e}")
 
-        # 注释：返回 `{"results": original_memories}` 给调用方。
+        # 逻辑注释：对外统一用 results 包一层，保持 add/search/get_all 等接口返回结构一致。
         return {"results": original_memories}
 
-    # 注释：处理高级元数据过滤表达式。
+    # 逻辑注释：把平台层的增强过滤语法转换成向量库更容易消费的格式，并支持 AND/OR/NOT 组合。
     def _process_metadata_filters(self, metadata_filters: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process enhanced metadata filters and convert them to vector store compatible format.
@@ -3890,115 +3672,107 @@ class AsyncMemory(MemoryBase):
         Returns:
             Dict of processed filters compatible with vector store
         """
-        # 注释：初始化 处理后的过滤条件 为空字典，用于后续按键保存数据。
+        # 逻辑注释：转换结果单独累积，最后再替换/合并到有效 filters 里。
         processed_filters = {}
 
-        # 注释：定义 process_condition 函数/方法，封装一段可复用逻辑。
+        # 逻辑注释：定义 process_condition，封装这段业务逻辑，减少外部调用方理解内部细节的成本。
         def process_condition(key: str, condition: Any) -> Dict[str, Any]:
-            # 注释：判断条件 `not isinstance(condition, dict)` 是否成立。
+            # 逻辑注释：非 dict 条件代表简单等值匹配，是最常见、最直接的过滤形式。
             if not isinstance(condition, dict):
                 # Simple equality: {"key": "value"}
+                # 逻辑注释：星号表示通配字段，具体如何匹配由底层向量库适配层处理。
                 if condition == "*":
                     # Wildcard: match everything for this field (implementation depends on vector store)
                     return {key: "*"}
-                # 注释：返回 `{key: condition}` 给调用方。
                 return {key: condition}
 
-            # 注释：初始化 result 变量 为空字典，用于后续按键保存数据。
             result = {}
-            # 注释：遍历 condition.items() 中的元素，并将当前项赋给 operator, value。
+            # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
             for operator, value in condition.items():
                 # Map platform operators to universal format that can be translated by each vector store
+                # 逻辑注释：建立平台操作符到内部操作符的映射，当前两边同名，但保留了适配空间。
                 operator_map = {
                     "eq": "eq", "ne": "ne", "gt": "gt", "gte": "gte",
                     "lt": "lt", "lte": "lte", "in": "in", "nin": "nin",
                     "contains": "contains", "icontains": "icontains"
                 }
 
-                # 注释：判断条件 `operator in operator_map` 是否成立。
+                # 逻辑注释：只允许白名单里的操作符，避免未知过滤语法被静默传到向量库。
                 if operator in operator_map:
-                    # 注释：调用 result.setdefault 执行对应操作。
+                    # 逻辑注释：同一个字段可能有多个比较条件，用嵌套 dict 合并到同一字段下。
                     result.setdefault(key, {})[operator_map[operator]] = value
-                # 注释：处理前面条件不成立时的默认分支。
                 else:
-                    # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+                    # 逻辑注释：遇到不支持的操作符立即报错，避免用户以为过滤生效但实际被忽略。
                     raise ValueError(f"Unsupported metadata filter operator: {operator}")
-            # 注释：返回 `result` 给调用方。
             return result
 
-        # 注释：定义 merge_filters 函数/方法，封装一段可复用逻辑。
+        # 逻辑注释：定义 merge_filters，封装这段业务逻辑，减少外部调用方理解内部细节的成本。
         def merge_filters(target: Dict[str, Any], source: Dict[str, Any]) -> None:
             """Merge source into target, deep-merging nested operator dicts for the same key."""
-            # 注释：遍历 source.items() 中的元素，并将当前项赋给 key, value。
+            # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
             for key, value in source.items():
-                # 注释：判断条件 `key in target and isinstance(target[key], dict) and isinstance(value, dict)` 是否成立。
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if key in target and isinstance(target[key], dict) and isinstance(value, dict):
-                    # 注释：执行当前语句，推进该函数的业务流程。
+                    # 逻辑注释：同一个字段的多个操作符合并到一起，例如 gte 和 lte 可以同时存在。
                     target[key].update(value)
-                # 注释：处理前面条件不成立时的默认分支。
                 else:
-                    # 注释：计算并保存 target 变量，供后续逻辑使用。
+                    # 逻辑注释：字段不存在或不是同类嵌套结构时，直接写入目标 filters。
                     target[key] = value
 
-        # 注释：遍历 metadata_filters.items() 中的元素，并将当前项赋给 key, value。
+        # 逻辑注释：逐个处理原始 filters 条目，普通字段和逻辑操作符分开转换。
         for key, value in metadata_filters.items():
-            # 注释：判断条件 `key == "AND"` 是否成立。
+            # 逻辑注释：AND 语义是所有子条件同时成立，所以可以直接合并到同一个 filters 对象里。
             if key == "AND":
                 # Logical AND: combine multiple conditions
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if not isinstance(value, list):
-                    # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+                    # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
                     raise ValueError("AND operator requires a list of conditions")
-                # 注释：遍历 value 中的元素，并将当前项赋给 condition。
+                # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
                 for condition in value:
-                    # 注释：遍历 condition.items() 中的元素，并将当前项赋给 sub_key, sub_value。
                     for sub_key, sub_value in condition.items():
-                        # 注释：调用 merge_filters 执行对应操作。
                         merge_filters(processed_filters, process_condition(sub_key, sub_value))
-            # 注释：当前一个条件不成立时，继续判断 `key == "OR"`。
+            # 逻辑注释：这是对前面判断的补充分支，用来兼容另一种输入/配置形态。
             elif key == "OR":
                 # Logical OR: Pass through to vector store for implementation-specific handling
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if not isinstance(value, list) or not value:
-                    # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+                    # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
                     raise ValueError("OR operator requires a non-empty list of conditions")
                 # Store OR conditions in a way that vector stores can interpret
+                # 逻辑注释：$or 保存多个备选条件，每个条件内部仍按普通字段规则转换。
                 processed_filters["$or"] = []
-                # 注释：遍历 value 中的元素，并将当前项赋给 condition。
+                # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
                 for condition in value:
-                    # 注释：初始化 or_condition 变量 为空字典，用于后续按键保存数据。
                     or_condition = {}
-                    # 注释：遍历 condition.items() 中的元素，并将当前项赋给 sub_key, sub_value。
+                    # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
                     for sub_key, sub_value in condition.items():
-                        # 注释：调用 merge_filters 执行对应操作。
                         merge_filters(or_condition, process_condition(sub_key, sub_value))
-                    # 注释：执行当前语句，推进该函数的业务流程。
+                    # 逻辑注释：$or 保存多个备选条件，每个条件内部仍按普通字段规则转换。
                     processed_filters["$or"].append(or_condition)
-            # 注释：当前一个条件不成立时，继续判断 `key == "NOT"`。
+            # 逻辑注释：这是对前面判断的补充分支，用来兼容另一种输入/配置形态。
             elif key == "NOT":
                 # Logical NOT: Pass through to vector store for implementation-specific handling
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if not isinstance(value, list) or not value:
-                    # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+                    # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
                     raise ValueError("NOT operator requires a non-empty list of conditions")
-                # 注释：初始化 处理后的过滤条件 为空列表，用于后续收集数据。
+                # 逻辑注释：$not 保存需要排除的条件集合，交给底层适配层处理。
                 processed_filters["$not"] = []
-                # 注释：遍历 value 中的元素，并将当前项赋给 condition。
+                # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
                 for condition in value:
-                    # 注释：初始化 not_condition 变量 为空字典，用于后续按键保存数据。
                     not_condition = {}
-                    # 注释：遍历 condition.items() 中的元素，并将当前项赋给 sub_key, sub_value。
+                    # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
                     for sub_key, sub_value in condition.items():
-                        # 注释：调用 merge_filters 执行对应操作。
                         merge_filters(not_condition, process_condition(sub_key, sub_value))
-                    # 注释：执行当前语句，推进该函数的业务流程。
+                    # 逻辑注释：$not 保存需要排除的条件集合，交给底层适配层处理。
                     processed_filters["$not"].append(not_condition)
-            # 注释：处理前面条件不成立时的默认分支。
             else:
-                # 注释：调用 merge_filters 执行对应操作。
                 merge_filters(processed_filters, process_condition(key, value))
 
-        # 注释：返回 `processed_filters` 给调用方。
         return processed_filters
 
-    # 注释：判断过滤条件中是否包含高级操作符。
+    # 逻辑注释：轻量判断 filters 是否包含高级操作符，用来决定是否需要进入转换流程。
     def _has_advanced_operators(self, filters: Dict[str, Any]) -> bool:
         """
         Check if filters contain advanced operators that need special processing.
@@ -4009,97 +3783,105 @@ class AsyncMemory(MemoryBase):
         Returns:
             bool: True if advanced operators are detected
         """
-        # 注释：判断条件 `not isinstance(filters, dict)` 是否成立。
+        # 逻辑注释：非 dict filters 不可能包含高级过滤语法，直接返回 False。
         if not isinstance(filters, dict):
-            # 注释：返回 `False` 给调用方。
             return False
 
-        # 注释：遍历 filters.items() 中的元素，并将当前项赋给 key, value。
+        # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
         for key, value in filters.items():
             # Check for platform-style logical operators
+            # 逻辑注释：出现逻辑操作符就说明需要高级过滤转换。
             if key in ["AND", "OR", "NOT"]:
-                # 注释：返回 `True` 给调用方。
                 return True
             # Check for comparison operators (without $ prefix for universal compatibility)
+            # 逻辑注释：字段值是 dict 时可能包含 eq/gt/in 等比较操作符，需要继续检查。
             if isinstance(value, dict):
-                # 注释：遍历 value.keys() 中的元素，并将当前项赋给 op。
+                # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
                 for op in value.keys():
-                    # 注释：判断条件 `op in ["eq", "ne", "gt", "gte", "lt", "lte", "in", "nin", "contains", "iconta...` 是否成立。
+                    # 逻辑注释：命中任意比较/包含操作符，就判定 filters 使用了高级语法。
                     if op in ["eq", "ne", "gt", "gte", "lt", "lte", "in", "nin", "contains", "icontains"]:
-                        # 注释：返回 `True` 给调用方。
                         return True
             # Check for wildcard values
+            # 逻辑注释：通配符也属于增强过滤语义，需要走转换逻辑。
             if value == "*":
-                # 注释：返回 `True` 给调用方。
                 return True
-        # 注释：返回 `False` 给调用方。
         return False
 
-    # 注释：执行向量检索、关键词检索和综合排序。
+    # 逻辑注释：底层混合检索：语义向量召回、关键词 BM25、实体增强一起打分，再统一排序和格式化。
     async def _search_vector_store(self, query, filters, limit, threshold=0.1):
-        # 注释：判断条件 `threshold is None` 是否成立。
+        # 逻辑注释：兼容旧调用可能传 None 的情况，统一回落到默认阈值 0.1。
         if threshold is None:
-            # 注释：计算并保存 相似度阈值，供后续逻辑使用。
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             threshold = 0.1
 
         # Step 1: Preprocess query (CPU-bound)
+        # 逻辑注释：查询文本也做词形归一化，保证和写入时保存的 text_lemmatized 在同一空间比较。
         query_lemmatized = await asyncio.to_thread(lemmatize_for_bm25, query)
-        # 注释：计算并保存 query_entities 变量，供后续逻辑使用。
+        # 逻辑注释：从记忆文本抽取实体，只有抽到实体才需要进入实体链接流程。
         query_entities = await asyncio.to_thread(extract_entities, query)
 
         # Step 2: Embed query
+        # 逻辑注释：查询向量用于语义召回，能找到表述不同但含义相近的记忆。
         embeddings = await asyncio.to_thread(self.embedding_model.embed, query, "search")
 
         # Step 3: Semantic search (over-fetch)
+        # 逻辑注释：先多召回一些候选，再融合 BM25/实体分数排序，避免早期截断错过好结果。
         internal_limit = max(limit * 4, 60)
-        # 注释：计算并保存 semantic_results 变量，供后续逻辑使用。
+        # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
         semantic_results = await asyncio.to_thread(
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             self.vector_store.search, query=query, vectors=embeddings, top_k=internal_limit, filters=filters
         )
 
         # Step 4: Keyword search (if store supports it)
+        # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
         keyword_results = await asyncio.to_thread(
+            # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
             self.vector_store.keyword_search, query=query_lemmatized, top_k=internal_limit, filters=filters
         )
 
         # Step 5: Compute BM25 scores
+        # 逻辑注释：BM25 分数单独按 memory_id 保存，后面和语义分数融合。
         bm25_scores = {}
-        # 注释：判断条件 `keyword_results is not None` 是否成立。
+        # 逻辑注释：有些向量库可能不支持 keyword_search；None 表示跳过关键词分支。
         if keyword_results is not None:
-            # 注释：为 `midpoint, steepness` 赋值，准备后续处理所需的数据。
+            # 逻辑注释：根据查询长度/形态选择归一化参数，把 BM25 原始分数压到可融合区间。
             midpoint, steepness = get_bm25_params(query, lemmatized=query_lemmatized)
-            # 注释：遍历 keyword_results 中的元素，并将当前项赋给 mem。
+            # 逻辑注释：逐条读取关键词检索结果，将不同返回对象格式统一成 memory_id 和 raw_score。
             for mem in keyword_results:
-                # 注释：计算并保存 mem_id 变量，供后续逻辑使用。
+                # 逻辑注释：兼容对象式和 dict 式结果，统一转成字符串 ID 作为打分 key。
                 mem_id = str(mem.id) if hasattr(mem, 'id') else str(mem.get('id', ''))
-                # 注释：计算并保存 raw_score 变量，供后续逻辑使用。
+                # 逻辑注释：同样兼容对象式/dict 式 score 字段，避免绑定某一种向量库返回类型。
                 raw_score = mem.score if hasattr(mem, 'score') else mem.get('score', 0)
-                # 注释：判断条件 `raw_score and raw_score > 0` 是否成立。
+                # 逻辑注释：只有正向关键词匹配分才参与融合，零分或空值不会影响排序。
                 if raw_score and raw_score > 0:
-                    # 注释：计算并保存 bm25_scores 变量，供后续逻辑使用。
+                    # 逻辑注释：把 BM25 原始分归一化，和语义/实体分数处在可比较尺度上。
                     bm25_scores[mem_id] = normalize_bm25(raw_score, midpoint, steepness)
 
         # Step 6: Compute entity boosts
+        # 逻辑注释：实体增强默认为空；没有抽到查询实体时，最终排序不会受到实体分支影响。
         entity_boosts = {}
-        # 注释：判断条件 `query_entities` 是否成立。
+        # 逻辑注释：只有查询里有实体时才访问实体库，减少普通搜索的额外开销。
         if query_entities:
-            # 注释：计算并保存 entity_boosts 变量，供后续逻辑使用。
+            # 逻辑注释：实体增强会把命中实体关联的记忆额外加分，让精确实体相关结果更靠前。
             entity_boosts = await self._compute_entity_boosts_async(query_entities, filters)
 
         # Step 7: Build candidate set from semantic results
+        # 逻辑注释：把语义召回结果转换成统一候选结构，供 score_and_rank 融合排序。
         candidates = []
-        # 注释：遍历 semantic_results 中的元素，并将当前项赋给 mem。
+        # 逻辑注释：遍历语义候选，保留 id、语义分和 payload，后续格式化也依赖 payload。
         for mem in semantic_results:
-            # 注释：计算并保存 mem_id 变量，供后续逻辑使用。
+            # 逻辑注释：兼容对象式和 dict 式结果，统一转成字符串 ID 作为打分 key。
             mem_id = str(mem.id)
-            # 注释：调用 candidates.append 执行对应操作。
             candidates.append({
                 "id": mem_id,
                 "score": mem.score,
+                # 逻辑注释：payload 里包含记忆正文、metadata、hash 等返回所需信息。
                 "payload": mem.payload if hasattr(mem, 'payload') else {},
             })
 
         # Step 8: Score and rank
+        # 逻辑注释：统一融合语义分、BM25 分和实体 boost，并按阈值/top_k 截断。
         scored_results = score_and_rank(
             semantic_results=candidates,
             bm25_scores=bm25_scores,
@@ -4109,6 +3891,7 @@ class AsyncMemory(MemoryBase):
         )
 
         # Step 9: Format results
+        # 逻辑注释：这些 payload 字段是常用作用域/来源信息，返回时提升到顶层，调用方读取更方便。
         promoted_payload_keys = [
             "user_id",
             "agent_id",
@@ -4116,21 +3899,20 @@ class AsyncMemory(MemoryBase):
             "actor_id",
             "role",
         ]
-        # 注释：计算并保存 核心字段和已提升字段集合，供后续逻辑使用。
+        # 逻辑注释：核心字段和已提升字段不再放进 metadata，避免结果里重复出现同一信息。
         core_and_promoted_keys = {"data", "hash", "created_at", "updated_at", "id", "text_lemmatized", "attributed_to", *promoted_payload_keys}
 
-        # 注释：初始化 original_memories 变量 为空列表，用于后续收集数据。
+        # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
         original_memories = []
-        # 注释：遍历 scored_results 中的元素，并将当前项赋给 scored。
+        # 逻辑注释：只格式化融合排序后的最终结果，而不是所有召回候选。
         for scored in scored_results:
-            # 注释：计算并保存 向量库载荷数据，供后续逻辑使用。
+            # 逻辑注释：从候选中安全取 payload；缺失时用空 dict 防止字段访问异常。
             payload = scored.get("payload") or {}
-            # 注释：判断条件 `not payload.get("data")` 是否成立。
+            # 逻辑注释：没有 data 的候选不是有效记忆文本，跳过避免返回空 memory。
             if not payload.get("data"):
-                # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                 continue
 
-            # 注释：计算并保存 格式化后的记忆字典，供后续逻辑使用。
+            # 逻辑注释：用 MemoryItem 统一字段名和序列化形态，屏蔽不同向量库返回对象的差异。
             memory_item_dict = MemoryItem(
                 id=scored["id"],
                 memory=payload.get("data", ""),
@@ -4140,65 +3922,62 @@ class AsyncMemory(MemoryBase):
                 score=scored["score"],
             ).model_dump()
 
-            # 注释：遍历 promoted_payload_keys 中的元素，并将当前项赋给 key。
+            # 逻辑注释：遍历可提升字段，只有 payload 里真的存在时才加入返回结果。
             for key in promoted_payload_keys:
-                # 注释：判断条件 `key in payload` 是否成立。
+                # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                 if key in payload:
-                    # 注释：计算并保存 格式化后的记忆字典，供后续逻辑使用。
+                    # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
                     memory_item_dict[key] = payload[key]
 
-            # 注释：计算并保存 额外元数据，供后续逻辑使用。
+            # 逻辑注释：除系统字段外的 payload 都视为用户自定义 metadata，保留在 metadata 子对象里。
             additional_metadata = {k: v for k, v in payload.items() if k not in core_and_promoted_keys}
-            # 注释：判断条件 `additional_metadata` 是否成立。
+            # 逻辑注释：只有存在额外 metadata 时才添加 metadata 字段，保持返回结构简洁。
             if additional_metadata:
-                # 注释：判断条件 `not memory_item_dict.get("metadata")` 是否成立。
+                # 逻辑注释：向量库没有返回记录时表示 memory_id 不存在，get 用 None 表达未找到。
                 if not memory_item_dict.get("metadata"):
-                    # 注释：初始化 格式化后的记忆字典 为空字典，用于后续按键保存数据。
+                    # 逻辑注释：这里构造中间变量来统一不同输入/后端返回形态，后续逻辑只依赖规范化后的结构。
                     memory_item_dict["metadata"] = {}
-                # 注释：执行当前语句，推进该函数的业务流程。
+                # 逻辑注释：把额外 metadata 合并到结果对象，既保留系统字段，又不丢调用方自定义字段。
                 memory_item_dict["metadata"].update(additional_metadata)
 
-            # 注释：调用 original_memories.append 执行对应操作。
             original_memories.append(memory_item_dict)
 
-        # 注释：返回 `original_memories` 给调用方。
+        # 逻辑注释：返回已经格式化过的结果，调用方无需理解向量库原始 payload 结构。
         return original_memories
 
-    # 注释：定义 _compute_entity_boosts_async 函数/方法，封装一段可复用逻辑。
+    # 逻辑注释：异步版实体增强计算，把 embedding 和向量库查询放到线程池，避免阻塞事件循环。
     async def _compute_entity_boosts_async(self, query_entities, filters):
         """Async version of entity boost computation."""
-        # 注释：初始化 seen 变量 为空集合，用于后续去重。
+        # 逻辑注释：用集合在单条文本内去重，避免同一个实体重复 upsert。
         seen = set()
-        # 注释：初始化 deduped 变量 为空列表，用于后续收集数据。
+        # 逻辑注释：实体增强前先准备去重后的实体列表，避免重复查询同一实体。
         deduped = []
-        # 注释：遍历 query_entities[ 中的元素，并将当前项赋给 entity_type, entity_text。
+        # 逻辑注释：最多处理前 8 个实体，防止复杂查询触发过多实体库查询。
         for entity_type, entity_text in query_entities[:8]:
-            # 注释：计算并保存 key 变量，供后续逻辑使用。
+            # 逻辑注释：实体去重用小写+去空白后的规范 key，降低大小写和首尾空格带来的重复。
             key = entity_text.strip().lower()
-            # 注释：判断条件 `key and key not in seen` 是否成立。
+            # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
             if key and key not in seen:
-                # 注释：调用 seen.add 执行对应操作。
                 seen.add(key)
-                # 注释：调用 deduped.append 执行对应操作。
+                # 逻辑注释：只把非空且未见过的实体加入待查询列表。
                 deduped.append((entity_type, entity_text))
 
-        # 注释：判断条件 `not deduped` 是否成立。
+        # 逻辑注释：去重后没有实体时无需访问实体库，直接返回空 boost。
         if not deduped:
-            # 注释：返回 `{}` 给调用方。
+            # 逻辑注释：没有实体增强可用时返回空映射，后续融合打分自然退化为普通检索。
             return {}
 
-        # 注释：计算并保存 检索过滤条件，供后续逻辑使用。
+        # 逻辑注释：实体检索只使用 session 级作用域字段，保证实体链接不会跨用户/agent/run 串数据。
         search_filters = {k: v for k, v in filters.items() if k in ("user_id", "agent_id", "run_id") and v}
-        # 注释：初始化 memory_boosts 变量 为空字典，用于后续按键保存数据。
+        # 逻辑注释：最终按 memory_id 保存 boost，多个实体命中同一记忆时取最大值。
         memory_boosts = {}
 
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：遍历 deduped 中的元素，并将当前项赋给 _, entity_text。
+            # 逻辑注释：逐个查询实体库，每个实体都可能为一批关联记忆提供加分。
             for _, entity_text in deduped:
-                # 注释：计算并保存 实体向量，供后续逻辑使用。
+                # 逻辑注释：实体也需要单独向量化，才能在实体库里用相似度判断是否已有同一实体。
                 entity_embedding = await asyncio.to_thread(self.embedding_model.embed, entity_text, "search")
-                # 注释：计算并保存 matches 变量，供后续逻辑使用。
+                # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
                 matches = await asyncio.to_thread(
                     self.entity_store.search,
                     query=entity_text,
@@ -4207,49 +3986,43 @@ class AsyncMemory(MemoryBase):
                     filters=search_filters,
                 )
 
-                # 注释：遍历 matches 中的元素，并将当前项赋给 match。
+                # 逻辑注释：这里按集合顺序逐项处理，通常是为了把批量输入拆成可验证、可写入或可格式化的单元。
                 for match in matches:
-                    # 注释：计算并保存 similarity 变量，供后续逻辑使用。
                     similarity = match.score if hasattr(match, 'score') else 0.0
-                    # 注释：判断条件 `similarity < 0.5` 是否成立。
+                    # 逻辑注释：实体匹配太弱时不加分，避免噪声实体影响搜索排序。
                     if similarity < 0.5:
-                        # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                         continue
 
-                    # 注释：计算并保存 向量库载荷数据，供后续逻辑使用。
                     payload = match.payload if hasattr(match, 'payload') else {}
-                    # 注释：计算并保存 关联记忆 ID 列表，供后续逻辑使用。
+                    # 逻辑注释：实体节点的反向链接列表告诉我们哪些记忆与该实体有关。
                     linked_memory_ids = payload.get("linked_memory_ids", [])
-                    # 注释：判断条件 `not isinstance(linked_memory_ids, list)` 是否成立。
+                    # 逻辑注释：链接字段异常时跳过该实体，避免坏 payload 影响搜索。
                     if not isinstance(linked_memory_ids, list):
-                        # 注释：跳过本轮循环剩余逻辑，继续处理下一项。
                         continue
 
-                    # 注释：计算并保存 num_linked 变量，供后续逻辑使用。
+                    # 逻辑注释：实体关联的记忆越多，越可能是泛化实体，需要降低单条记忆的 boost。
                     num_linked = max(len(linked_memory_ids), 1)
-                    # 注释：计算并保存 memory_count_weight 变量，供后续逻辑使用。
+                    # 逻辑注释：用扩散衰减权重抑制“高频实体”造成的过度加分。
                     memory_count_weight = 1.0 / (1.0 + 0.001 * ((num_linked - 1) ** 2))
-                    # 注释：计算并保存 boost 变量，供后续逻辑使用。
+                    # 逻辑注释：最终实体 boost 同时考虑实体相似度、全局权重和扩散衰减。
                     boost = similarity * ENTITY_BOOST_WEIGHT * memory_count_weight
 
-                    # 注释：遍历 linked_memory_ids 中的元素，并将当前项赋给 memory_id。
+                    # 逻辑注释：把同一实体带来的 boost 分发到它关联的每条记忆上。
                     for memory_id in linked_memory_ids:
-                        # 注释：判断条件 `memory_id` 是否成立。
+                        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
                         if memory_id:
-                            # 注释：计算并保存 memory_key 变量，供后续逻辑使用。
                             memory_key = str(memory_id)
-                            # 注释：计算并保存 memory_boosts 变量，供后续逻辑使用。
+                            # 逻辑注释：同一记忆被多个实体命中时取最大 boost，避免简单累加导致多实体查询过度放大。
                             memory_boosts[memory_key] = max(memory_boosts.get(memory_key, 0.0), boost)
 
-        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
         except Exception as e:
-            # 注释：输出警告日志。
+            # 逻辑注释：实体增强失败时保留普通混合检索结果，搜索功能不中断。
             logger.warning(f"Entity boost computation failed: {e}")
 
-        # 注释：返回 `memory_boosts` 给调用方。
         return memory_boosts
 
-    # 注释：更新指定 ID 的记忆内容。
+    # 逻辑注释：更新入口先生成新文本 embedding，再交给内部方法处理向量、metadata、历史和实体索引同步。
     async def update(self, memory_id, data, metadata: Optional[Dict[str, Any]] = None):
         """
         Update a memory by ID asynchronously.
@@ -4266,20 +4039,19 @@ class AsyncMemory(MemoryBase):
             >>> await m.update(memory_id="mem_123", data="Likes to play tennis on weekends")
             {'message': 'Memory updated successfully!'}
         """
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event("mem0.update", self, {"memory_id": memory_id, "sync_type": "async"})
 
-        # 注释：计算并保存 向量表示，供后续逻辑使用。
+        # 逻辑注释：查询向量用于语义召回，能找到表述不同但含义相近的记忆。
         embeddings = await asyncio.to_thread(self.embedding_model.embed, data, "update")
-        # 注释：计算并保存 existing_embeddings 变量，供后续逻辑使用。
+        # 逻辑注释：提前计算新文本 embedding，并用 dict 传给内部更新方法，避免重复计算。
         existing_embeddings = {data: embeddings}
 
-        # 注释：等待异步操作 `self._update_memory(memory_id, data, existing_embeddings, metadata)` 完成。
+        # 逻辑注释：内部更新方法负责真正修改向量库、写历史并同步实体索引。
         await self._update_memory(memory_id, data, existing_embeddings, metadata)
-        # 注释：返回 `{"message": "Memory updated successfully!"}` 给调用方。
         return {"message": "Memory updated successfully!"}
 
-    # 注释：删除指定 ID 的记忆。
+    # 逻辑注释：删除入口先确认 memory_id 存在，再删除向量记录并写入删除历史。
     async def delete(self, memory_id):
         """
         Delete a memory by ID asynchronously.
@@ -4287,22 +4059,21 @@ class AsyncMemory(MemoryBase):
         Args:
             memory_id (str): ID of the memory to delete.
         """
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event("mem0.delete", self, {"memory_id": memory_id, "sync_type": "async"})
 
-        # 注释：计算并保存 existing_memory 变量，供后续逻辑使用。
+        # 逻辑注释：通过向量库 ID 直接取 payload，这是 get/update/delete 的基础读取路径。
         existing_memory = await asyncio.to_thread(self.vector_store.get, vector_id=memory_id)
-        # 注释：判断条件 `existing_memory is None` 是否成立。
+        # 逻辑注释：找不到旧记忆时不能继续更新/删除，必须向调用方报告无效 memory_id。
         if existing_memory is None:
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError(f"Memory with id {memory_id} not found")
 
-        # 注释：等待异步操作 `self._delete_memory(memory_id, existing_memory)` 完成。
+        # 逻辑注释：内部删除方法统一处理向量库删除、历史记录和实体索引清理。
         await self._delete_memory(memory_id, existing_memory)
-        # 注释：返回 `{"message": "Memory deleted successfully!"}` 给调用方。
         return {"message": "Memory deleted successfully!"}
 
-    # 注释：按用户、代理或运行 ID 批量删除记忆。
+    # 逻辑注释：按作用域批量删除记忆；要求至少一个实体过滤条件，避免误删整个库。
     async def delete_all(self, user_id=None, agent_id=None, run_id=None):
         """
         Delete all memories asynchronously.
@@ -4312,52 +4083,44 @@ class AsyncMemory(MemoryBase):
             agent_id (str, optional): ID of the agent to delete memories for. Defaults to None.
             run_id (str, optional): ID of the run to delete memories for. Defaults to None.
         """
-        # 注释：初始化 过滤条件 为空字典，用于后续按键保存数据。
         filters = {}
-        # 注释：判断条件 `user_id` 是否成立。
+        # 逻辑注释：有 user_id 时同时写入 metadata 和 filters，新增记忆和查询旧记忆会落在同一个用户作用域。
         if user_id:
-            # 注释：计算并保存 过滤条件，供后续逻辑使用。
             filters["user_id"] = user_id
-        # 注释：判断条件 `agent_id` 是否成立。
+        # 逻辑注释：agent_id 也参与存储和过滤，支持按 agent 维度隔离记忆。
         if agent_id:
-            # 注释：计算并保存 过滤条件，供后续逻辑使用。
             filters["agent_id"] = agent_id
-        # 注释：判断条件 `run_id` 是否成立。
+        # 逻辑注释：run_id 用于一次运行/会话级别的隔离，适合临时任务或批处理场景。
         if run_id:
-            # 注释：计算并保存 过滤条件，供后续逻辑使用。
             filters["run_id"] = run_id
 
-        # 注释：判断条件 `not filters` 是否成立。
+        # 逻辑注释：没有任何过滤条件时拒绝批量删除，避免误删所有记忆；全量清空必须显式调用 reset。
         if not filters:
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError(
                 "At least one filter is required to delete all memories. If you want to delete all memories, use the `reset()` method."
             )
 
-        # 注释：为 `keys, encoded_ids` 赋值，准备后续处理所需的数据。
+        # 逻辑注释：遥测前对 filters 做脱敏/编码，只上报维度信息而不是原始实体 ID。
         keys, encoded_ids = process_telemetry_filters(filters)
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event("mem0.delete_all", self, {"keys": keys, "encoded_ids": encoded_ids, "sync_type": "async"})
-        # 注释：计算并保存 memories 变量，供后续逻辑使用。
+        # 逻辑注释：先列出当前作用域下所有记忆，再逐条走统一删除逻辑，确保历史和实体清理不遗漏。
         memories = await asyncio.to_thread(self.vector_store.list, filters=filters)
 
-        # 注释：初始化 delete_tasks 变量 为空列表，用于后续收集数据。
         delete_tasks = []
-        # 注释：遍历 memories[0] 中的元素，并将当前项赋给 memory。
+        # 逻辑注释：逐条删除可以复用 _delete_memory 的审计和实体清理流程。
         for memory in memories[0]:
-            # 注释：调用 delete_tasks.append 执行对应操作。
+            # 逻辑注释：内部删除方法统一处理向量库删除、历史记录和实体索引清理。
             delete_tasks.append(self._delete_memory(memory.id))
 
-        # 注释：等待异步操作 `asyncio.gather(*delete_tasks)` 完成。
         await asyncio.gather(*delete_tasks)
 
-        # 注释：输出信息日志。
         logger.info(f"Deleted {len(memories[0])} memories")
 
-        # 注释：返回 `{"message": "Memories deleted successfully!"}` 给调用方。
         return {"message": "Memories deleted successfully!"}
 
-    # 注释：读取指定记忆的变更历史。
+    # 逻辑注释：读取某条记忆的变更历史，方便审计 ADD/UPDATE/DELETE 过程。
     async def history(self, memory_id):
         """
         Get the history of changes for a memory by ID asynchronously.
@@ -4368,42 +4131,40 @@ class AsyncMemory(MemoryBase):
         Returns:
             list: List of changes for the memory.
         """
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event("mem0.history", self, {"memory_id": memory_id, "sync_type": "async"})
-        # 注释：返回 `await asyncio.to_thread(self.db.get_history, memory_id)` 给调用方。
+        # 逻辑注释：返回 memory_id 让上层可以继续记录、链接实体或给用户展示操作结果。
         return await asyncio.to_thread(self.db.get_history, memory_id)
 
-    # 注释：创建一条新记忆并写入向量库和历史表。
+    # 逻辑注释：创建单条记忆的通用 helper：生成 ID、补齐 metadata/hash/time、写向量库并记录历史。
     async def _create_memory(self, data, existing_embeddings, metadata=None):
-        # 注释：输出调试日志。
+        # 逻辑注释：创建前打 debug 日志，调试时可看到即将写入的记忆正文。
         logger.debug(f"Creating memory with {data=}")
-        # 注释：判断条件 `data in existing_embeddings` 是否成立。
+        # 逻辑注释：如果上层已传入新文本 embedding，就直接复用，避免二次 embedding 调用。
         if data in existing_embeddings:
-            # 注释：计算并保存 向量表示，供后续逻辑使用。
+            # 逻辑注释：复用调用方已经计算好的 embedding，减少重复计算和 provider 成本。
             embeddings = existing_embeddings[data]
-        # 注释：处理前面条件不成立时的默认分支。
         else:
-            # 注释：计算并保存 向量表示，供后续逻辑使用。
+            # 逻辑注释：查询向量用于语义召回，能找到表述不同但含义相近的记忆。
             embeddings = await asyncio.to_thread(self.embedding_model.embed, data, memory_action="add")
 
-        # 注释：计算并保存 记忆 ID，供后续逻辑使用。
+        # 逻辑注释：每条记忆用 UUID 作为向量库 ID，保证跨批次新增也不会冲突。
         memory_id = str(uuid.uuid4())
-        # 注释：深拷贝生成 new_metadata 变量，避免修改原始输入对象。
+        # 逻辑注释：更新时先从调用方新 metadata 开始，再补齐系统字段和旧作用域字段。
         new_metadata = deepcopy(metadata) if metadata is not None else {}
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+        # 逻辑注释：更新后的正文写回 data 字段，读取和搜索都会看到新文本。
         new_metadata["data"] = data
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+        # 逻辑注释：更新后重新计算内容 hash，保证后续去重依据和新文本一致。
         new_metadata["hash"] = hashlib.md5(data.encode()).hexdigest()
-        # 注释：判断条件 `"created_at" not in new_metadata` 是否成立。
+        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
         if "created_at" not in new_metadata:
-            # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
             new_metadata["created_at"] = datetime.now(timezone.utc).isoformat()
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
         new_metadata["updated_at"] = new_metadata["created_at"]
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+        # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
         new_metadata["text_lemmatized"] = lemmatize_for_bm25(data)
 
-        # 注释：等待异步操作 `asyncio.to_thread(` 完成。
+        # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
         await asyncio.to_thread(
             self.vector_store.insert,
             vectors=[embeddings],
@@ -4411,7 +4172,7 @@ class AsyncMemory(MemoryBase):
             payloads=[new_metadata],
         )
 
-        # 注释：等待异步操作 `asyncio.to_thread(` 完成。
+        # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
         await asyncio.to_thread(
             self.db.add_history,
             memory_id,
@@ -4424,10 +4185,10 @@ class AsyncMemory(MemoryBase):
             role=new_metadata.get("role"),
         )
 
-        # 注释：返回 `memory_id` 给调用方。
+        # 逻辑注释：返回 memory_id 让上层可以继续记录、链接实体或给用户展示操作结果。
         return memory_id
 
-    # 注释：创建程序性记忆。
+    # 逻辑注释：把一段对话压缩成“过程性记忆”再存储，适合记录 agent 的长期操作流程。
     async def _create_procedural_memory(self, messages, metadata=None, llm=None, prompt=None):
         """
         Create a procedural memory asynchronously
@@ -4438,155 +4199,142 @@ class AsyncMemory(MemoryBase):
             llm (llm, optional): LLM to use for the procedural memory creation. Defaults to None.
             prompt (str, optional): Prompt to use for the procedural memory creation. Defaults to None.
         """
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：从 langchain_core.messages.utils 模块批量导入后续列出的对象。
             from langchain_core.messages.utils import (
                 convert_to_messages,  # type: ignore
             )
-        # 注释：捕获 Exception 异常并执行降级或错误处理。
+        # 逻辑注释：这里进入兜底路径，通常会从批量操作退化为逐条处理，提升整体成功率。
         except Exception:
-            # 注释：输出错误日志。
             logger.error(
                 "Import error while loading langchain-core. Please install 'langchain-core' to use procedural memory."
             )
-            # 注释：执行当前语句，推进该函数的业务流程。
             raise
 
-        # 注释：输出信息日志。
+        # 逻辑注释：过程性记忆生成前记录日志，因为它会调用 LLM 做总结，成本和普通写入不同。
         logger.info("Creating procedural memory")
 
-        # 注释：计算并保存 parsed_messages 变量，供后续逻辑使用。
+        # 逻辑注释：构造用于过程性记忆的消息序列：系统提示、原对话、最后的总结指令。
         parsed_messages = [
             {"role": "system", "content": prompt or PROCEDURAL_MEMORY_SYSTEM_PROMPT},
             *messages,
             {"role": "user", "content": "Create procedural memory of the above conversation."},
         ]
 
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：判断条件 `llm is not None` 是否成立。
+            # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
             if llm is not None:
-                # 注释：计算并保存 parsed_messages 变量，供后续逻辑使用。
                 parsed_messages = convert_to_messages(parsed_messages)
-                # 注释：计算并保存 模型响应，供后续逻辑使用。
+                # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
                 response = await asyncio.to_thread(llm.invoke, input=parsed_messages)
-                # 注释：计算并保存 procedural_memory 变量，供后续逻辑使用。
                 procedural_memory = response.content
-            # 注释：处理前面条件不成立时的默认分支。
             else:
-                # 注释：计算并保存 procedural_memory 变量，供后续逻辑使用。
+                # 逻辑注释：调用 LLM 把整段对话总结成可长期保存的流程/操作记忆。
                 procedural_memory = await asyncio.to_thread(self.llm.generate_response, messages=parsed_messages)
-                # 注释：计算并保存 procedural_memory 变量，供后续逻辑使用。
+                # 逻辑注释：去掉 LLM 可能包上的代码块标记，存储时只保留纯文本记忆。
                 procedural_memory = remove_code_blocks(procedural_memory)
         
-        # 注释：捕获 Exception as e 异常并执行降级或错误处理。
+        # 逻辑注释：捕获通用异常用于记录上下文；是否继续取决于该步骤是不是主路径必需。
         except Exception as e:
-            # 注释：输出错误日志。
             logger.error(f"Error generating procedural memory summary: {e}")
-            # 注释：执行当前语句，推进该函数的业务流程。
             raise
 
-        # 注释：判断条件 `metadata is None` 是否成立。
+        # 逻辑注释：过程性记忆必须有 metadata/作用域，否则总结出来的流程无法归属到具体 agent/run。
         if metadata is None:
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError("Metadata cannot be done for procedural memory.")
 
-        # 注释：计算并保存 元数据，供后续逻辑使用。
+        # 逻辑注释：在原 metadata 基础上标记 memory_type，后续可区分普通事实记忆和过程性记忆。
         metadata = {**metadata, "memory_type": MemoryType.PROCEDURAL.value}
-        # 注释：计算并保存 向量表示，供后续逻辑使用。
+        # 逻辑注释：查询向量用于语义召回，能找到表述不同但含义相近的记忆。
         embeddings = await asyncio.to_thread(self.embedding_model.embed, procedural_memory, memory_action="add")
-        # 注释：计算并保存 记忆 ID，供后续逻辑使用。
+        # 逻辑注释：过程性记忆最终仍按普通记忆写入向量库和历史表，只是正文来自 LLM 总结。
         memory_id = await self._create_memory(procedural_memory, {procedural_memory: embeddings}, metadata=metadata)
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event("mem0._create_procedural_memory", self, {"memory_id": memory_id, "sync_type": "async"})
 
-        # 注释：计算并保存 result 变量，供后续逻辑使用。
+        # 逻辑注释：按 add 接口的返回格式包装过程性记忆创建结果。
         result = {"results": [{"id": memory_id, "memory": procedural_memory, "event": "ADD"}]}
 
-        # 注释：返回 `result` 给调用方。
         return result
 
-    # 注释：更新记忆的向量、载荷和历史记录。
+    # 逻辑注释：内部更新流程不仅改向量和 payload，还保留创建时间/作用域，记录历史，并重建相关实体链接。
     async def _update_memory(self, memory_id, data, existing_embeddings, metadata=None):
-        # 注释：输出信息日志。
+        # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
         logger.info(f"Updating memory with {data=}")
 
-        # 注释：进入可能抛出异常的代码块。
         try:
-            # 注释：计算并保存 existing_memory 变量，供后续逻辑使用。
+            # 逻辑注释：通过向量库 ID 直接取 payload，这是 get/update/delete 的基础读取路径。
             existing_memory = await asyncio.to_thread(self.vector_store.get, vector_id=memory_id)
-        # 注释：捕获 Exception 异常并执行降级或错误处理。
+        # 逻辑注释：这里进入兜底路径，通常会从批量操作退化为逐条处理，提升整体成功率。
         except Exception:
-            # 注释：输出错误日志。
             logger.error(f"Error getting memory with ID {memory_id} during update.")
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError(f"Error getting memory with ID {memory_id}. Please provide a valid 'memory_id'")
 
-        # 注释：判断条件 `existing_memory is None` 是否成立。
+        # 逻辑注释：找不到旧记忆时不能继续更新/删除，必须向调用方报告无效 memory_id。
         if existing_memory is None:
-            # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+            # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
             raise ValueError(f"Memory with id {memory_id} not found. Please provide a valid 'memory_id'")
 
-        # 注释：计算并保存 prev_value 变量，供后续逻辑使用。
+        # 逻辑注释：保存旧文本，后面写历史记录时能形成 old_memory → new_memory 的变更链。
         prev_value = existing_memory.payload.get("data")
 
-        # 注释：深拷贝生成 new_metadata 变量，避免修改原始输入对象。
+        # 逻辑注释：更新时先从调用方新 metadata 开始，再补齐系统字段和旧作用域字段。
         new_metadata = deepcopy(metadata) if metadata is not None else {}
 
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+        # 逻辑注释：更新后的正文写回 data 字段，读取和搜索都会看到新文本。
         new_metadata["data"] = data
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+        # 逻辑注释：更新后重新计算内容 hash，保证后续去重依据和新文本一致。
         new_metadata["hash"] = hashlib.md5(data.encode()).hexdigest()
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+        # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
         new_metadata["text_lemmatized"] = lemmatize_for_bm25(data)
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+        # 逻辑注释：更新不能改变原创建时间，因此从旧 payload 继承 created_at。
         new_metadata["created_at"] = existing_memory.payload.get("created_at")
-        # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+        # 逻辑注释：更新时间使用当前 UTC 时间，表示这次 update 的发生时间。
         new_metadata["updated_at"] = datetime.now(timezone.utc).isoformat()
 
         # Preserve session identifiers from existing memory only if not provided in new metadata
+        # 逻辑注释：如果调用方没显式覆盖 user_id，就沿用旧记忆的 user_id，避免更新后丢失作用域。
         if "user_id" not in new_metadata and "user_id" in existing_memory.payload:
-            # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
             new_metadata["user_id"] = existing_memory.payload["user_id"]
-        # 注释：判断条件 `"agent_id" not in new_metadata and "agent_id" in existing_memory.payload` 是否成立。
+        # 逻辑注释：agent_id 同样默认继承旧值，保持记忆仍在原 agent 作用域内。
         if "agent_id" not in new_metadata and "agent_id" in existing_memory.payload:
-            # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
             new_metadata["agent_id"] = existing_memory.payload["agent_id"]
-        # 注释：判断条件 `"run_id" not in new_metadata and "run_id" in existing_memory.payload` 是否成立。
+        # 逻辑注释：run_id 默认继承旧值，避免单条更新把记忆移出原运行范围。
         if "run_id" not in new_metadata and "run_id" in existing_memory.payload:
-            # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
             new_metadata["run_id"] = existing_memory.payload["run_id"]
 
-        # 注释：判断条件 `"actor_id" in existing_memory.payload` 是否成立。
+        # 逻辑注释：actor_id 来自原消息说话人，更新时继续保留，除非业务另行处理。
         if "actor_id" in existing_memory.payload:
-            # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
             new_metadata["actor_id"] = existing_memory.payload["actor_id"]
-        # 注释：判断条件 `"role" not in new_metadata and "role" in existing_memory.payload` 是否成立。
+        # 逻辑注释：role 默认继承旧值，让更新后的记忆仍知道原始消息角色。
         if "role" not in new_metadata and "role" in existing_memory.payload:
-            # 注释：计算并保存 new_metadata 变量，供后续逻辑使用。
+            # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
             new_metadata["role"] = existing_memory.payload["role"]
 
-        # 注释：判断条件 `data in existing_embeddings` 是否成立。
+        # 逻辑注释：如果上层已传入新文本 embedding，就直接复用，避免二次 embedding 调用。
         if data in existing_embeddings:
-            # 注释：计算并保存 向量表示，供后续逻辑使用。
+            # 逻辑注释：复用调用方已经计算好的 embedding，减少重复计算和 provider 成本。
             embeddings = existing_embeddings[data]
-        # 注释：处理前面条件不成立时的默认分支。
         else:
-            # 注释：计算并保存 向量表示，供后续逻辑使用。
+            # 逻辑注释：查询向量用于语义召回，能找到表述不同但含义相近的记忆。
             embeddings = await asyncio.to_thread(self.embedding_model.embed, data, "update")
 
-        # 注释：等待异步操作 `asyncio.to_thread(` 完成。
+        # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
         await asyncio.to_thread(
             self.vector_store.update,
             vector_id=memory_id,
             vector=embeddings,
             payload=new_metadata,
         )
-        # 注释：输出信息日志。
+        # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
         logger.info(f"Updating memory with ID {memory_id=} with {data=}")
 
-        # 注释：等待异步操作 `asyncio.to_thread(` 完成。
+        # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
         await asyncio.to_thread(
             self.db.add_history,
             memory_id,
@@ -4601,41 +4349,42 @@ class AsyncMemory(MemoryBase):
 
         # Entity-store cleanup: strip this memory's id from old-text entities,
         # then re-extract entities from the new text and link them back.
+        # 逻辑注释：从更新后的 metadata 提取 session filters，用于限定实体清理/重建的作用域。
         session_filters = {k: new_metadata[k] for k in ("user_id", "agent_id", "run_id") if new_metadata.get(k)}
-        # 注释：等待异步操作 `self._remove_memory_from_entity_store(memory_id, session_filters)` 完成。
+        # 逻辑注释：先把该 memory_id 从旧实体链接里移除，避免旧文本实体继续影响搜索。
         await self._remove_memory_from_entity_store(memory_id, session_filters)
-        # 注释：等待异步操作 `self._link_entities_for_memory(memory_id, data, session_filters)` 完成。
+        # 逻辑注释：再按新文本重新抽实体并链接，让实体索引和更新后的记忆保持一致。
         await self._link_entities_for_memory(memory_id, data, session_filters)
 
-        # 注释：返回 `memory_id` 给调用方。
+        # 逻辑注释：返回 memory_id 让上层可以继续记录、链接实体或给用户展示操作结果。
         return memory_id
 
-    # 注释：删除记忆并清理相关历史或实体索引。
+    # 逻辑注释：内部删除流程把向量库删除和历史审计打包在一起，并同步清理实体反向索引。
     async def _delete_memory(self, memory_id, existing_memory=None):
-        # 注释：输出信息日志。
+        # 逻辑注释：删除前记录目标 ID，方便调试删除链路。
         logger.info(f"Deleting memory with {memory_id=}")
-        # 注释：判断条件 `existing_memory is None` 是否成立。
+        # 逻辑注释：找不到旧记忆时不能继续更新/删除，必须向调用方报告无效 memory_id。
         if existing_memory is None:
-            # 注释：计算并保存 existing_memory 变量，供后续逻辑使用。
+            # 逻辑注释：通过向量库 ID 直接取 payload，这是 get/update/delete 的基础读取路径。
             existing_memory = await asyncio.to_thread(self.vector_store.get, vector_id=memory_id)
-            # 注释：判断条件 `existing_memory is None` 是否成立。
+            # 逻辑注释：找不到旧记忆时不能继续更新/删除，必须向调用方报告无效 memory_id。
             if existing_memory is None:
-                # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+                # 逻辑注释：发现调用方式或内部状态不满足要求时立即抛错，避免错误数据继续进入存储/检索流程。
                 raise ValueError(f"Memory with id {memory_id} not found. Please provide a valid 'memory_id'")
-        # 注释：计算并保存 prev_value 变量，供后续逻辑使用。
+        # 逻辑注释：删除历史需要保留被删除前的文本，因此先从 payload 取出旧值。
         prev_value = existing_memory.payload.get("data", "")
-        # 注释：计算并保存 created_at 变量，供后续逻辑使用。
+        # 逻辑注释：删除历史里保留原创建时间，并统一带时区时间到 UTC，方便审计排序。
         created_at = _normalize_iso_timestamp_to_utc(existing_memory.payload.get("created_at"))
-        # 注释：计算并保存 updated_at 变量，供后续逻辑使用。
+        # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
         updated_at = datetime.now(timezone.utc).isoformat()
-        # 注释：计算并保存 向量库载荷数据，供后续逻辑使用。
+        # 逻辑注释：旧 payload 可能为空，用空 dict 兜底以便安全提取 session filters。
         payload = existing_memory.payload or {}
-        # 注释：计算并保存 session_filters 变量，供后续逻辑使用。
+        # 逻辑注释：这里补齐或保存记忆生命周期相关字段，确保写入、更新、删除都有一致的元信息。
         session_filters = {k: payload[k] for k in ("user_id", "agent_id", "run_id") if payload.get(k)}
 
-        # 注释：等待异步操作 `asyncio.to_thread(self.vector_store.delete, vector_id=memory_id)` 完成。
+        # 逻辑注释：先从向量库删除主记忆，后面再写 DELETE 历史记录。
         await asyncio.to_thread(self.vector_store.delete, vector_id=memory_id)
-        # 注释：等待异步操作 `asyncio.to_thread(` 完成。
+        # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
         await asyncio.to_thread(
             self.db.add_history,
             memory_id,
@@ -4651,12 +4400,13 @@ class AsyncMemory(MemoryBase):
 
         # Entity-store cleanup: strip this memory's id from any entity records
         # that linked to it. Non-fatal — the helper swallows errors.
+        # 逻辑注释：先把该 memory_id 从旧实体链接里移除，避免旧文本实体继续影响搜索。
         await self._remove_memory_from_entity_store(memory_id, session_filters)
 
-        # 注释：返回 `memory_id` 给调用方。
+        # 逻辑注释：返回 memory_id 让上层可以继续记录、链接实体或给用户展示操作结果。
         return memory_id
 
-    # 注释：重置底层存储中的所有记忆数据。
+    # 逻辑注释：重置整个记忆系统：清理历史表、重建向量库，并在实体库已初始化时一并重置。
     async def reset(self):
         """
         Reset the memory store asynchronously by:
@@ -4664,48 +4414,47 @@ class AsyncMemory(MemoryBase):
             Resets the database
             Recreates the vector store with a new client
         """
-        # 注释：输出警告日志。
+        # 逻辑注释：reset 是破坏性操作，先用 warning 日志提示会清空所有记忆。
         logger.warning("Resetting all memories")
-        # 注释：等待异步操作 `asyncio.to_thread(self.vector_store.delete_col)` 完成。
+        # 逻辑注释：先从向量库删除主记忆，后面再写 DELETE 历史记录。
         await asyncio.to_thread(self.vector_store.delete_col)
 
-        # 注释：调用 gc.collect 执行对应操作。
         gc.collect()
 
-        # 注释：判断条件 `hasattr(self.vector_store, "client") and hasattr(self.vector_store.client, "c...` 是否成立。
+        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
         if hasattr(self.vector_store, "client") and hasattr(self.vector_store.client, "close"):
-            # 注释：等待异步操作 `asyncio.to_thread(self.vector_store.client.close)` 完成。
+            # 逻辑注释：这是异步版对阻塞同步调用的包装：把 CPU/IO 工作放到线程池，避免卡住事件循环。
             await asyncio.to_thread(self.vector_store.client.close)
 
-        # 注释：判断条件 `hasattr(self.db, "connection") and self.db.connection` 是否成立。
+        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
         if hasattr(self.db, "connection") and self.db.connection:
-            # 注释：等待异步操作 `asyncio.to_thread(lambda: self.db.connection.execute("DROP TABLE IF EXISTS hi...` 完成。
+            # 逻辑注释：先删历史表，确保 reset 后历史状态和向量库状态一致地从空开始。
             await asyncio.to_thread(lambda: self.db.connection.execute("DROP TABLE IF EXISTS history"))
-            # 注释：等待异步操作 `asyncio.to_thread(self.db.connection.close)` 完成。
+            # 逻辑注释：删除表后关闭旧 SQLite 连接，避免后续继续使用失效连接。
             await asyncio.to_thread(self.db.connection.close)
 
-        # 注释：设置当前实例的 db 属性，用于后续方法共享状态。
+        # 逻辑注释：SQLite 用来保存消息上下文和变更历史，和向量库形成“语义索引 + 审计记录”的双存储结构。
         self.db = SQLiteManager(self.config.history_db_path)
 
-        # 注释：设置当前实例的 vector_store 属性，用于后续方法共享状态。
+        # 逻辑注释：创建向量存储后，记忆文本的向量和 payload 都会通过它进行插入、查询、更新和删除。
         self.vector_store = VectorStoreFactory.create(
             self.config.vector_store.provider, self.config.vector_store.config
         )
 
-        # 注释：记录遥测事件，便于统计调用行为。
+        # 逻辑注释：记录当前操作的遥测事件，用于观察 API 使用情况和排查性能/行为问题。
         capture_event("mem0.reset", self, {"sync_type": "async"})
 
-    # 注释：定义 close 函数/方法，封装一段可复用逻辑。
+    # 逻辑注释：释放 SQLite 等持有的资源，避免长生命周期进程里连接泄漏。
     def close(self):
         """Release resources held by this AsyncMemory instance."""
-        # 注释：判断条件 `hasattr(self, "db") and self.db is not None` 是否成立。
+        # 逻辑注释：这里根据当前状态选择分支，目的是只在满足业务前提时才继续执行后续操作。
         if hasattr(self, "db") and self.db is not None:
-            # 注释：调用 self.db.close 执行对应操作。
+            # 逻辑注释：关闭 SQLite 连接，释放文件句柄/锁。
             self.db.close()
-            # 注释：设置当前实例的 db 属性，用于后续方法共享状态。
+            # 逻辑注释：关闭后置空引用，防止后续误用已关闭连接。
             self.db = None
 
-    # 注释：预留聊天接口。
+    # 逻辑注释：占位接口，明确当前 Memory 类还没有实现聊天能力。
     async def chat(self, query):
-        # 注释：主动抛出异常，提示调用方当前输入或状态不合法。
+        # 逻辑注释：显式抛出未实现错误，比静默返回更容易让调用方发现该接口不可用。
         raise NotImplementedError("Chat function not implemented yet.")
