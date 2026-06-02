@@ -604,11 +604,10 @@ class Memory(MemoryBase):
                 are treated as general conversational/factual memories.
             prompt (str, optional): Prompt to use for the memory creation. Defaults to None.
 
-
         Returns:
             dict: A dictionary containing the result of the memory addition operation, typically
-                  including a list of memory items affected (added, updated) under a "results" key.
-                  Example for v1.1+: `{"results": [{"id": "...", "memory": "...", "event": "ADD"}]}`
+                including a list of memory items affected (added, updated) under a "results" key.
+                Example for v1.1+: `{"results": [{"id": "...", "memory": "...", "event": "ADD"}]}`
 
         Raises:
             Mem0ValidationError: If input validation fails (invalid memory_type, messages format, etc.).
@@ -618,6 +617,7 @@ class Memory(MemoryBase):
             DatabaseError: If database operations fail.
         """
 
+        # Step 1: 构造有效的 metadata 和 filters，用于后续存储和检索
         processed_metadata, effective_filters = _build_filters_and_metadata(
             user_id=user_id,
             agent_id=agent_id,
@@ -625,6 +625,7 @@ class Memory(MemoryBase):
             input_metadata=metadata,
         )
 
+        # Step 2: 校验 memory_type，如果指定了 type 且不是 procedural_memory，抛出异常
         if memory_type is not None and memory_type != MemoryType.PROCEDURAL.value:
             raise Mem0ValidationError(
                 message=f"Invalid 'memory_type'. Please pass {MemoryType.PROCEDURAL.value} to create procedural memories.",
@@ -633,13 +634,17 @@ class Memory(MemoryBase):
                 suggestion=f"Use '{MemoryType.PROCEDURAL.value}' to create procedural memories."
             )
 
+        # Step 3: 规范化 messages 输入
         if isinstance(messages, str):
+            # 如果是字符串，封装为 [{"role": "user", "content": messages}]
             messages = [{"role": "user", "content": messages}]
 
         elif isinstance(messages, dict):
+            # 如果是单个字典，封装为列表
             messages = [messages]
 
         elif not isinstance(messages, list):
+            # 非 list / dict / str 输入类型抛出异常
             raise Mem0ValidationError(
                 message="messages must be str, dict, or list[dict]",
                 error_code="VALIDATION_003",
@@ -647,16 +652,21 @@ class Memory(MemoryBase):
                 suggestion="Convert your input to a string, dictionary, or list of dictionaries."
             )
 
+        # Step 4: 如果是 procedural memory 并且提供了 agent_id，则调用专门的创建函数
         if agent_id is not None and memory_type == MemoryType.PROCEDURAL.value:
             results = self._create_procedural_memory(messages, metadata=processed_metadata, prompt=prompt)
-            return results
+            return results  # 直接返回，不走一般 conversation memory 流程
 
+        # Step 5: 如果 LLM 支持视觉输入，则解析 vision 消息；否则做普通解析
         if self.config.llm.config.get("enable_vision"):
             messages = parse_vision_messages(messages, self.llm, self.config.llm.config.get("vision_details"))
         else:
             messages = parse_vision_messages(messages)
 
+        # Step 6: 调用核心函数 _add_to_vector_store()，完成 memory 抽取 / embed / persist / entity linking
         vector_store_result = self._add_to_vector_store(messages, processed_metadata, effective_filters, infer, prompt=prompt)
+
+        # Step 7: 返回结构化结果，通常包含 {"results": [{id, memory, event:"ADD"}]}
         return {"results": vector_store_result}
 
     def _add_to_vector_store(self, messages, metadata, filters, infer, prompt=None):
