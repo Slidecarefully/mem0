@@ -1309,14 +1309,14 @@ class Memory(MemoryBase):
     ):
         """
         Searches for memories based on a query.
-
+    
         Args:
             query (str): Query to search for.
             top_k (int, optional): Maximum number of results to return. Defaults to 20.
             filters (dict): Filter dict containing entity IDs and optional metadata filters.
                 Must contain at least one of: user_id, agent_id, run_id.
                 Example: filters={"user_id": "u1", "agent_id": "a1"}
-
+    
                 Enhanced metadata filtering with operators:
                 - {"key": "value"} - exact match
                 - {"key": {"eq": "value"}} - equals
@@ -1335,55 +1335,93 @@ class Memory(MemoryBase):
                 - {"NOT": [filter1]} - logical NOT
             threshold (float, optional): Minimum score for a memory to be included. Defaults to 0.1.
             rerank (bool, optional): Whether to rerank results. Defaults to False.
-
+    
         Returns:
             dict: A dictionary containing the search results under a "results" key.
                   Example for v1.1+: `{"results": [{"id": "...", "memory": "...", "score": 0.8, ...}]}`
-
+    
         Raises:
             ValueError: If filters doesn't contain at least one of user_id, agent_id, run_id,
                 or if threshold/top_k values are invalid.
         """
+    
+        # Step 1: 拒绝通过 kwargs 传入 user_id / agent_id / run_id。
+        # 这些实体参数必须放在 filters 里，例如 filters={"user_id": "u1"}。
         # Reject top-level entity params - must use filters instead
         _reject_top_level_entity_params(kwargs, "search")
-
+    
+        # Step 2: 校验 search 参数是否合法。
+        # threshold 必须在 0 到 1 之间；top_k 必须是非负整数。
         # Validate search parameters (before applying defaults)
         _validate_search_params(threshold=threshold, top_k=top_k)
-
+    
+        # Step 3: 复制 filters，避免直接修改外部传进来的原始 filters。
+        # 如果调用方没有传 filters，则使用空 dict。
         # Validate and trim entity IDs in filters
         effective_filters = filters.copy() if filters else {}
+    
+        # Step 4: 如果 filters 里有 user_id，则校验并去除前后空格。
+        # 如果 user_id 为空、全空格、或包含内部空白字符，会抛出异常。
         if "user_id" in effective_filters:
             effective_filters["user_id"] = _validate_and_trim_entity_id(
                 effective_filters["user_id"], "user_id"
             )
+    
+        # Step 5: 如果 filters 里有 agent_id，则校验并规范化。
         if "agent_id" in effective_filters:
             effective_filters["agent_id"] = _validate_and_trim_entity_id(
                 effective_filters["agent_id"], "agent_id"
             )
+    
+        # Step 6: 如果 filters 里有 run_id，则校验并规范化。
         if "run_id" in effective_filters:
             effective_filters["run_id"] = _validate_and_trim_entity_id(
                 effective_filters["run_id"], "run_id"
             )
+    
+        # Step 7: search 必须至少限定一个作用域。
+        # 也就是说 filters 里必须包含 user_id / agent_id / run_id 中的至少一个。
+        # 这样可以避免跨用户、跨 agent、跨 run 搜索全部 memory。
         if not any(key in effective_filters for key in ("user_id", "agent_id", "run_id")):
             raise ValueError(
                 "filters must contain at least one of: user_id, agent_id, run_id. "
                 "Example: filters={'user_id': 'u1'}"
             )
-
+    
+        # Step 8: 设置本次 search 最终返回结果数量。
+        # 这里直接使用 top_k。
         limit = top_k
-
+    
+        # Step 9: 如果 filters 中包含高级 metadata 过滤操作符，
+        # 例如 AND / OR / NOT / eq / in / contains 等，则需要先转换成 vector store 可识别的格式。
         # Apply enhanced metadata filtering if advanced operators are detected
         if self._has_advanced_operators(effective_filters):
+            # Step 9.1: 将增强版 filters 转换成底层 vector store 兼容的 filters。
             processed_filters = self._process_metadata_filters(effective_filters)
+    
+            # Step 9.2: 删除已经被重新处理过的逻辑操作符，避免重复传递。
             # Remove logical/operator keys that have been reprocessed
             for logical_key in ("AND", "OR", "NOT"):
                 effective_filters.pop(logical_key, None)
+    
+            # Step 9.3: 删除已经被转换处理过的普通字段级高级过滤条件。
+            # 例如 {"age": {"gt": 10}} 这种 dict 形式的过滤条件。
             for fk in list(effective_filters.keys()):
-                if fk not in ("AND", "OR", "NOT", "user_id", "agent_id", "run_id") and isinstance(effective_filters.get(fk), dict):
+                if (
+                    fk not in ("AND", "OR", "NOT", "user_id", "agent_id", "run_id")
+                    and isinstance(effective_filters.get(fk), dict)
+                ):
                     effective_filters.pop(fk, None)
+    
+            # Step 9.4: 将处理后的 filters 合并回 effective_filters。
             effective_filters.update(processed_filters)
-
+    
+        # Step 10: 对 filters 做 telemetry 处理。
+        # process_telemetry_filters 通常会提取 keys，并对敏感 id 做编码，避免直接上传原始 ID。
         keys, encoded_ids = process_telemetry_filters(effective_filters)
+    
+        # Step 11: 记录 search 调用事件。
+        # 这里会记录 limit、版本号、过滤字段、threshold、是否使用高级 filters 等信息。
         capture_event(
             "mem0.search",
             self,
@@ -1397,17 +1435,37 @@ class Memory(MemoryBase):
                 "advanced_filters": bool(filters and self._has_advanced_operators(filters)),
             },
         )
-
+    
+        # Step 12: 调用核心检索函数 _search_vector_store()。
+        # 这里才是真正执行 memory 检索的地方。
+        # 内部会做：
+        # - query lemmatization
+        # - entity extraction
+        # - query embedding
+        # - vector_store.search(...)
+        # - vector_store.keyword_search(...)
+        # - BM25 score
+        # - entity boost
+        # - score_and_rank(...)
         original_memories = self._search_vector_store(query, effective_filters, limit, threshold)
-
+    
+        # Step 13: 如果开启 rerank，并且配置了 reranker，同时已有初步检索结果，
+        # 则对 original_memories 做二次重排。
         # Apply reranking if enabled and reranker is available
         if rerank and self.reranker and original_memories:
             try:
+                # Step 13.1: 调用 reranker，对初步结果重新排序。
                 reranked_memories = self.reranker.rerank(query, original_memories, limit)
+    
+                # Step 13.2: 用重排后的结果替换原始结果。
                 original_memories = reranked_memories
             except Exception as e:
+                # Step 13.3: 如果 rerank 失败，不中断 search。
+                # 直接记录 warning，并继续使用原始检索结果。
                 logger.warning(f"Reranking failed, using original results: {e}")
-
+    
+        # Step 14: 返回最终结果。
+        # 返回格式统一为 {"results": [...]}。
         return {"results": original_memories}
 
     def _process_metadata_filters(self, metadata_filters: Dict[str, Any]) -> Dict[str, Any]:
