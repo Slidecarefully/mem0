@@ -1573,53 +1573,102 @@ class Memory(MemoryBase):
         return False
 
     def _search_vector_store(self, query, filters, limit, threshold=0.1):
+        # Step 0: 兼容旧调用方式。
+        # 如果调用方传入 threshold=None，则默认恢复为 0.1。
         # Guard against None threshold (backward compat)
         if threshold is None:
             threshold = 0.1
 
+        # Step 1: 对用户查询 query 做预处理。
+        # query_lemmatized 用于后续 keyword/BM25 检索；
+        # query_entities 用于后续实体增强 entity boost。
         # Step 1: Preprocess query
         query_lemmatized = lemmatize_for_bm25(query)
         query_entities = extract_entities(query)
 
+        # Step 2: 将原始 query 转成向量。
+        # 这里 mode 是 "search"，表示该 embedding 用于检索，而不是写入。
         # Step 2: Embed query
         embeddings = self.embedding_model.embed(query, "search")
 
+        # Step 3: 执行语义向量检索。
+        # internal_limit 会比最终 limit 更大，用于 over-fetch。
+        # 例如最终只返回 20 条，但内部可能先取 max(20*4, 60)=80 条，
+        # 后面再通过 BM25、entity boost、score_and_rank 重新排序和筛选。
         # Step 3: Semantic search (over-fetch for scoring pool)
         internal_limit = max(limit * 4, 60)
         semantic_results = self.vector_store.search(
             query=query, vectors=embeddings, top_k=internal_limit, filters=filters
         )
 
+        # Step 4: 执行关键词检索。
+        # 这里传入的是 lemmatize 后的 query。
+        # 注意：不是所有 vector store 都一定支持 keyword_search；
+        # 如果不支持，可能返回 None。
         # Step 4: Keyword search (if store supports it)
         keyword_results = self.vector_store.keyword_search(
             query=query_lemmatized, top_k=internal_limit, filters=filters
         )
 
+        # Step 5: 根据 keyword_results 计算 BM25 分数。
+        # bm25_scores 是一个 dict：
+        # {
+        #   memory_id: normalized_bm25_score
+        # }
+        # 后面会和 semantic score、entity boost 一起融合排序。
         # Step 5: Compute BM25 scores from keyword results
         bm25_scores = {}
+
+        # Step 5.1: 如果 vector store 返回了关键词检索结果，则开始计算 BM25。
         if keyword_results is not None:
+            # Step 5.2: 根据 query 特征获取 BM25 归一化参数。
             midpoint, steepness = get_bm25_params(query, lemmatized=query_lemmatized)
+
+            # Step 5.3: 遍历关键词检索返回的每条 memory。
             for mem in keyword_results:
+                # Step 5.4: 兼容两种返回格式：
+                # 一种是对象属性 mem.id；
+                # 另一种是 dict 格式 mem["id"]。
                 mem_id = str(mem.id) if hasattr(mem, 'id') else str(mem.get('id', ''))
+
+                # Step 5.5: 同样兼容对象属性 mem.score 和 dict 格式 mem["score"]。
                 raw_score = mem.score if hasattr(mem, 'score') else mem.get('score', 0)
+
+                # Step 5.6: 只处理有效的正分数。
                 if raw_score and raw_score > 0:
+                    # Step 5.7: 将原始 BM25 分数归一化，方便和其他分数融合。
                     bm25_scores[mem_id] = normalize_bm25(raw_score, midpoint, steepness)
 
+        # Step 6: 计算实体增强分数。
+        # 如果 query 中抽取出了实体，则通过 entity_store 找相关 memory，
+        # 并给这些 memory 额外加权。
         # Step 6: Compute entity boosts
         entity_boosts = {}
         if query_entities:
             entity_boosts = self._compute_entity_boosts(query_entities, filters)
 
+        # Step 7: 将语义检索结果整理成统一 candidate 格式。
+        # score_and_rank() 后面只需要 id、score、payload 这几个字段。
         # Step 7: Build candidate set from semantic results
         candidates = []
         for mem in semantic_results:
+            # Step 7.1: 取出 memory id。
             mem_id = str(mem.id)
+
+            # Step 7.2: 构造候选项。
             candidates.append({
                 "id": mem_id,
                 "score": mem.score,
                 "payload": mem.payload if hasattr(mem, 'payload') else {},
             })
 
+        # Step 8: 对候选 memories 做综合打分和排序。
+        # 融合的信息包括：
+        # - semantic_results: 语义向量检索结果
+        # - bm25_scores: 关键词/BM25 分数
+        # - entity_boosts: 实体增强分数
+        # - threshold: 最低分数门槛
+        # - top_k: 最终返回数量
         # Step 8: Score and rank
         scored_results = score_and_rank(
             semantic_results=candidates,
@@ -1629,7 +1678,10 @@ class Memory(MemoryBase):
             top_k=limit,
         )
 
+        # Step 9: 将排序后的结果格式化成对外返回的 memory item。
         # Step 9: Format results
+
+        # Step 9.1: 这些 payload 字段会被提升到返回结果的顶层。
         promoted_payload_keys = [
             "user_id",
             "agent_id",
@@ -1637,15 +1689,34 @@ class Memory(MemoryBase):
             "actor_id",
             "role",
         ]
-        core_and_promoted_keys = {"data", "hash", "created_at", "updated_at", "id", "text_lemmatized", "attributed_to", *promoted_payload_keys}
 
+        # Step 9.2: 这些字段属于核心字段或已提升字段，
+        # 后面构造 additional_metadata 时会排除它们。
+        core_and_promoted_keys = {
+            "data",
+            "hash",
+            "created_at",
+            "updated_at",
+            "id",
+            "text_lemmatized",
+            "attributed_to",
+            *promoted_payload_keys
+        }
+
+        # Step 9.3: 用于收集最终格式化后的 memories。
         original_memories = []
+
+        # Step 9.4: 遍历 score_and_rank() 返回的排序结果。
         for scored in scored_results:
+            # Step 9.5: 取出 memory payload。
             payload = scored.get("payload") or {}
 
+            # Step 9.6: 如果 payload 中没有真正的 memory 文本 data，则跳过该候选。
             if not payload.get("data"):
                 continue  # Skip candidates with no payload data
 
+            # Step 9.7: 构造标准 MemoryItem。
+            # 这里会把 id、memory、hash、created_at、updated_at、score 放进结果。
             memory_item_dict = MemoryItem(
                 id=scored["id"],
                 memory=payload.get("data", ""),
@@ -1655,19 +1726,30 @@ class Memory(MemoryBase):
                 score=scored["score"],
             ).model_dump()
 
+            # Step 9.8: 将 user_id / agent_id / run_id / actor_id / role 等字段提升到顶层。
             for key in promoted_payload_keys:
                 if key in payload:
                     memory_item_dict[key] = payload[key]
 
-            additional_metadata = {k: v for k, v in payload.items() if k not in core_and_promoted_keys}
+            # Step 9.9: 其余非核心字段统一放进 metadata。
+            additional_metadata = {
+                k: v
+                for k, v in payload.items()
+                if k not in core_and_promoted_keys
+            }
+
+            # Step 9.10: 如果存在额外 metadata，则合并进返回结果。
             if additional_metadata:
                 if not memory_item_dict.get("metadata"):
                     memory_item_dict["metadata"] = {}
                 memory_item_dict["metadata"].update(additional_metadata)
 
+            # Step 9.11: 将格式化后的 memory 加入最终结果列表。
             original_memories.append(memory_item_dict)
 
+        # Step 10: 返回最终 search 结果列表。
         return original_memories
+
 
     def _compute_entity_boosts(self, query_entities, filters):
         """Compute per-memory entity boosts from entity store search.
@@ -1680,24 +1762,52 @@ class Memory(MemoryBase):
         Returns:
             Dict mapping memory_id (str) -> max entity boost [0, 0.5].
         """
+
+        # Step 1: 对 query 中抽取出的实体做去重。
+        # 最多只处理前 8 个实体，避免 query 里实体过多导致检索成本过高。
         # Deduplicate entities (max 8)
         seen = set()
         deduped = []
+
+        # Step 1.1: 遍历最多 8 个实体。
         for entity_type, entity_text in query_entities[:8]:
+            # Step 1.2: 使用小写 + 去空格后的 entity_text 作为去重 key。
             key = entity_text.strip().lower()
+
+            # Step 1.3: 如果 key 非空且之前没出现过，则保留该实体。
             if key and key not in seen:
                 seen.add(key)
                 deduped.append((entity_type, entity_text))
 
+        # Step 2: 如果去重后没有实体，则不需要做 entity boost。
         if not deduped:
             return {}
 
-        search_filters = {k: v for k, v in filters.items() if k in ("user_id", "agent_id", "run_id") and v}
+        # Step 3: 从 filters 中提取 session 级过滤条件。
+        # 只保留 user_id / agent_id / run_id，
+        # 这样 entity store 搜索不会跨用户、跨 agent、跨 run。
+        search_filters = {
+            k: v
+            for k, v in filters.items()
+            if k in ("user_id", "agent_id", "run_id") and v
+        }
+
+        # Step 4: 初始化 memory_boosts。
+        # 结构为：
+        # {
+        #   memory_id: boost_score
+        # }
         memory_boosts = {}
 
         try:
+            # Step 5: 逐个处理去重后的 query entity。
             for _, entity_text in deduped:
+                # Step 5.1: 对实体文本做 embedding。
+                # 这里 mode 是 "search"，因为是为了检索 entity store。
                 entity_embedding = self.embedding_model.embed(entity_text, "search")
+
+                # Step 5.2: 在 entity_store 中搜索相似实体。
+                # top_k=500 表示最多召回 500 个相关实体。
                 matches = self.entity_store.search(
                     query=entity_text,
                     vectors=entity_embedding,
@@ -1705,29 +1815,56 @@ class Memory(MemoryBase):
                     filters=search_filters,
                 )
 
+                # Step 5.3: 遍历 entity_store 中匹配到的实体。
                 for match in matches:
+                    # Step 5.4: 取出实体相似度分数。
                     similarity = match.score if hasattr(match, 'score') else 0.0
+
+                    # Step 5.5: 相似度低于 0.5 的实体不参与 boost。
                     if similarity < 0.5:
                         continue
 
+                    # Step 5.6: 取出实体 payload。
                     payload = match.payload if hasattr(match, 'payload') else {}
+
+                    # Step 5.7: 取出该实体关联的 memory ids。
                     linked_memory_ids = payload.get("linked_memory_ids", [])
+
+                    # Step 5.8: 如果 linked_memory_ids 不是 list，则跳过。
                     if not isinstance(linked_memory_ids, list):
                         continue
 
+                    # Step 5.9: 计算衰减权重。
+                    # 如果一个实体链接了很多 memories，说明它可能过于泛化；
+                    # 因此链接越多，每条 memory 获得的 boost 越小。
                     # Spread-attenuated boost: entities linking to many memories get attenuated
                     num_linked = max(len(linked_memory_ids), 1)
                     memory_count_weight = 1.0 / (1.0 + 0.001 * ((num_linked - 1) ** 2))
+
+                    # Step 5.10: 计算最终 boost。
+                    # similarity 越高，boost 越高；
+                    # ENTITY_BOOST_WEIGHT 是全局实体增强权重；
+                    # memory_count_weight 用于抑制过于泛化的实体。
                     boost = similarity * ENTITY_BOOST_WEIGHT * memory_count_weight
 
+                    # Step 5.11: 将 boost 分配给该实体关联的所有 memory。
                     for memory_id in linked_memory_ids:
                         if memory_id:
                             memory_key = str(memory_id)
-                            memory_boosts[memory_key] = max(memory_boosts.get(memory_key, 0.0), boost)
+
+                            # Step 5.12: 如果同一个 memory 被多个实体命中，
+                            # 保留最大的 boost，而不是累加，避免 boost 被过度放大。
+                            memory_boosts[memory_key] = max(
+                                memory_boosts.get(memory_key, 0.0),
+                                boost
+                            )
 
         except Exception as e:
+            # Step 6: 如果实体增强计算失败，不中断主搜索流程。
+            # 只记录 warning，并返回已经计算出的 memory_boosts 或空 dict。
             logger.warning(f"Entity boost computation failed: {e}")
 
+        # Step 7: 返回 memory_id -> boost_score 的映射。
         return memory_boosts
 
     def update(self, memory_id, data, metadata: Optional[Dict[str, Any]] = None):
