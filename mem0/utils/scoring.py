@@ -83,50 +83,83 @@ def score_and_rank(
         List of scored result dicts sorted by combined score descending.
     """
 
-    # Step 1: 判断是否有 BM25 分数和实体增强分数
+    # Step 1: 判断本次搜索是否有 BM25 分数参与。
+    # 如果 bm25_scores 非空，说明 keyword search / BM25 检索产生了有效信号。
     has_bm25 = bool(bm25_scores)
+
+    # Step 2: 判断本次搜索是否有实体增强分数参与。
+    # 如果 entity_boosts 非空，说明 query 中抽取出了实体，
+    # 并且 entity_store 找到了相关实体和 linked memory。
     has_entity = bool(entity_boosts)
 
-    # Step 2: 初始化最大可能分数（max_possible），用于归一化
-    max_possible = 1.0  # 语义分本身最大值为 1.0
-    if has_bm25:
-        max_possible += 1.0  # 如果 BM25 存在，最大可能值增加 1.0
-    if has_entity:
-        max_possible += ENTITY_BOOST_WEIGHT  # 如果 entity boost 存在，增加全局权重
+    # Step 3: 初始化最大可能分数。
+    # 默认至少有 semantic score，因此基础 max_possible = 1.0。
+    max_possible = 1.0
 
-    # Step 3: 用于存储最终评分后的候选结果
+    # Step 4: 如果有 BM25 信号，则最大可能分数增加 1.0。
+    # 也就是说，semantic + BM25 的理论最大值是 2.0。
+    if has_bm25:
+        max_possible += 1.0
+
+    # Step 5: 如果有 entity boost 信号，则最大可能分数增加 ENTITY_BOOST_WEIGHT。
+    # ENTITY_BOOST_WEIGHT 通常是一个全局常量，比如 0.5。
+    # 所以 semantic + entity 的理论最大值一般是 1.5；
+    # semantic + BM25 + entity 的理论最大值一般是 2.5。
+    if has_entity:
+        max_possible += ENTITY_BOOST_WEIGHT
+
+    # Step 6: 初始化最终 scored 结果列表。
+    # 每个元素最终形如：
+    # {
+    #     "id": "...",
+    #     "score": combined_score,
+    #     "payload": ...
+    # }
     scored: List[Dict[str, Any]] = []
 
-    # Step 4: 遍历每个 semantic candidate
+    # Step 7: 遍历语义检索返回的候选结果。
+    # 注意：这里的主候选集合来自 semantic_results。
+    # BM25 和 entity_boost 只对这些候选做加分，不会单独引入新的候选。
     for result in semantic_results:
-        # Step 4.1: 获取 memory id
+        # Step 7.1: 取出 memory id。
         mem_id = result.get("id")
-        if mem_id is None:
-            continue  # 如果没有 id，跳过该 candidate
 
-        # Step 4.2: 获取 semantic 分数
+        # Step 7.2: 如果候选结果没有 id，则无法关联 BM25/entity 分数，直接跳过。
+        if mem_id is None:
+            continue
+
+        # Step 7.3: 取出语义相似度分数。
+        # 如果没有 score 字段，则默认按 0.0 处理。
         semantic_score = result.get("score", 0.0)
 
-        # Step 4.3: 应用 threshold 门限
-        # 如果 semantic 分数低于 threshold，即使 BM25 或 entity boost 很高也会被排除
+        # Step 7.4: 先用 semantic_score 做 threshold 过滤。
+        # 这是一个重要设计：
+        # 如果语义分数低于 threshold，即使 BM25 或 entity_boost 很高，也不会进入最终结果。
         if semantic_score < threshold:
             continue
 
+        # Step 7.5: 将 memory id 转成字符串。
+        # 因为 bm25_scores 和 entity_boosts 的 key 都是字符串形式的 memory_id。
         mem_id_str = str(mem_id)
 
-        # Step 4.4: 获取 BM25 分数（如果没有则默认为 0）
+        # Step 7.6: 取出该 memory 对应的 BM25 分数。
+        # 如果没有命中 BM25，则默认为 0.0。
         bm25_score = bm25_scores.get(mem_id_str, 0.0)
 
-        # Step 4.5: 获取 entity boost 分数（如果没有则默认为 0）
+        # Step 7.7: 取出该 memory 对应的实体增强分数。
+        # 如果没有 entity boost，则默认为 0.0。
         entity_boost = entity_boosts.get(mem_id_str, 0.0)
 
-        # Step 4.6: 计算原始组合分数
+        # Step 7.8: 将三个信号直接相加，得到原始综合分数。
+        # raw_combined = 语义分数 + BM25 分数 + 实体增强分数。
         raw_combined = semantic_score + bm25_score + entity_boost
 
-        # Step 4.7: 归一化组合分数到 [0,1]，防止超出 1
+        # Step 7.9: 将原始综合分数除以 max_possible，归一化到 0~1 区间。
+        # min(..., 1.0) 用于兜底，避免由于异常分数导致最终 score 超过 1。
         combined = min(raw_combined / max_possible, 1.0)
 
-        # Step 4.8: 将 memory id、归一化分数和 payload 封装到 scored 列表
+        # Step 7.10: 把计算后的结果加入 scored 列表。
+        # payload 原样保留，供后续格式化成 MemoryItem。
         scored.append(
             {
                 "id": mem_id_str,
@@ -135,8 +168,8 @@ def score_and_rank(
             }
         )
 
-    # Step 5: 根据 combined score 降序排序
+    # Step 8: 按综合分数从高到低排序。
     scored.sort(key=lambda x: x["score"], reverse=True)
 
-    # Step 6: 返回 top_k 个候选结果
+    # Step 9: 只返回前 top_k 条结果。
     return scored[:top_k]
