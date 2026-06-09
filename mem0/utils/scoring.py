@@ -22,21 +22,54 @@ def get_bm25_params(query: str, *, lemmatized: Optional[str] = None) -> tuple:
     Returns:
         (midpoint, steepness) for sigmoid normalization.
     """
+
+    # Step 1: 判断调用方是否已经传入 lemmatized query。
+    # lemmatized 是经过词形还原 / 规范化后的 query，
+    # 用它来统计 query term 数量会比直接使用原始 query 更稳定。
     if lemmatized is None:
+        # Step 1.1: 如果调用方没有传入 lemmatized query，
+        # 则在函数内部导入 lemmatize_for_bm25。
+        # 这里使用局部导入，可以避免模块加载时产生额外依赖或循环导入问题。
         from mem0.utils.lemmatization import lemmatize_for_bm25
 
+        # Step 1.2: 对原始 query 做 BM25 用的词形还原 / 规范化。
         lemmatized = lemmatize_for_bm25(query)
+
+    # Step 2: 统计 query 中的 term 数量。
+    # 如果 lemmatized 非空，就按空格 split 后计数；
+    # 如果 lemmatized 为空，则兜底认为至少有 1 个 term。
     num_terms = len(lemmatized.split()) if lemmatized else 1
 
+    # Step 3: 根据 query 长度选择 sigmoid normalization 的参数。
+    # 背后逻辑是：
+    # - 短 query 的 raw BM25 分数通常较低，所以 midpoint 设置得低一些；
+    # - 长 query 的 raw BM25 分数通常更高，所以 midpoint 设置得高一些；
+    # - steepness 控制 sigmoid 曲线变化速度，query 越长一般设置得越平缓。
     if num_terms <= 3:
+        # Step 3.1: 短 query，1~3 个 term。
+        # midpoint=5.0 表示 raw_score=5.0 时归一化后约为 0.5；
+        # steepness=0.7 表示曲线相对更陡。
         return 5.0, 0.7
+
     elif num_terms <= 6:
+        # Step 3.2: 中短 query，4~6 个 term。
+        # 由于 query 更长，BM25 原始分数可能更高，因此 midpoint 提高到 7.0。
         return 7.0, 0.6
+
     elif num_terms <= 9:
+        # Step 3.3: 中等长度 query，7~9 个 term。
+        # midpoint 继续提高到 9.0，steepness 降到 0.5，让归一化更平滑。
         return 9.0, 0.5
+
     elif num_terms <= 15:
+        # Step 3.4: 较长 query，10~15 个 term。
+        # midpoint=10.0，steepness=0.5。
         return 10.0, 0.5
+
     else:
+        # Step 3.5: 很长 query，超过 15 个 term。
+        # 长 query 更容易得到较大的 raw BM25 分数，
+        # 所以 midpoint 进一步提高到 12.0。
         return 12.0, 0.5
 
 
@@ -51,9 +84,24 @@ def normalize_bm25(raw_score: float, midpoint: float, steepness: float) -> float
     Returns:
         Normalized score in range [0, 1].
     """
+
+    # Step 4: 使用 logistic sigmoid 将原始 BM25 分数归一化到 [0, 1]。
+    #
+    # 公式：
+    # normalized = 1 / (1 + exp(-steepness * (raw_score - midpoint)))
+    #
+    # 含义：
+    # - 当 raw_score == midpoint 时，normalized ≈ 0.5；
+    # - 当 raw_score > midpoint 时，normalized 接近 1；
+    # - 当 raw_score < midpoint 时，normalized 接近 0；
+    # - steepness 越大，曲线越陡，分数变化越敏感；
+    # - steepness 越小，曲线越平缓，分数变化越温和。
     return 1.0 / (1.0 + math.exp(-steepness * (raw_score - midpoint)))
 
 
+# Step 5: 定义实体增强的最大权重。
+# 在 score_and_rank() 中，entity_boost 会和 semantic_score、bm25_score 相加。
+# ENTITY_BOOST_WEIGHT=0.5 表示实体信号最多按 0.5 这个量级参与综合打分。
 ENTITY_BOOST_WEIGHT = 0.5
 
 
