@@ -1,6 +1,26 @@
+# 本文件集中定义“记忆问答、记忆抽取、记忆更新、过程记忆总结”相关提示词，
+# 并提供一组将上下文数据整理成最终提示词文本的辅助函数。
+#
+# 注释原则：
+# 1. 原代码和原注释全部保留；
+# 2. 三引号字符串属于实际发送给模型的提示词，不能在字符串内部插入中文注释，
+#    否则会改变运行时提示词内容，因此对长字符串采用“赋值前整体说明”的方式；
+# 3. 对真正执行的 Python 语句，尽量按执行顺序逐行解释其数据流和分支逻辑。
+
+# 导入 json，用于把 Python 列表、字典等对象序列化为 JSON 文本，
+# 以便将记忆数据稳定地嵌入提示词中。
 import json
+
+# datetime 用于获取当前时间；timezone.utc 用于明确采用 UTC 时区，
+# 避免服务器本地时区不同导致日期不一致。
 from datetime import datetime, timezone
 
+# 记忆问答阶段的基础提示词。
+# 该提示词不负责抽取或修改记忆，而是告诉模型：
+# - 从已经提供的 memories 中寻找与问题相关的信息；
+# - 找不到相关记忆时，不要机械地回复“没有信息”，而应正常回答；
+# - 最终答案要准确、简洁并直接回应问题。
+# 后续调用方通常会在此字符串之后继续拼接具体记忆和用户问题。
 MEMORY_ANSWER_PROMPT = """
 You are an expert at answering questions based on the provided memories. Your task is to provide accurate and concise answers to the questions by leveraging the information given in the memories.
 
@@ -12,6 +32,13 @@ Guidelines:
 Here are the details of the task:
 """
 
+# 旧版事实抽取提示词。
+# 它从“用户和助手的对话”中提取适合长期保存的用户事实与偏好，
+# 并要求模型输出 {"facts": [...]} 形式的 JSON。
+# 使用 f-string 的原因是提示词中会在模块加载时写入当天日期。
+# 注意：datetime.now() 使用运行环境的本地时区，这一点与文件后部显式使用 UTC 的逻辑不同。
+# 字符串内部包含任务定义、信息类别、少样本示例、输出约束和语言要求；
+# 这些内容都是提示词本体，因此保持原样。
 FACT_RETRIEVAL_PROMPT = f"""You are a Personal Information Organizer, specialized in accurately storing facts, user memories, and preferences. Your primary role is to extract relevant pieces of information from conversations and organize them into distinct, manageable facts. This allows for easy retrieval and personalization in future interactions. Below are the types of information you need to focus on and the detailed instructions on how to handle the input data.
 
 Types of Information to Remember:
@@ -60,6 +87,13 @@ You should detect the language of the user input and record the facts in the sam
 """
 
 # USER_MEMORY_EXTRACTION_PROMPT - Enhanced version based on platform implementation
+# 用户记忆抽取提示词的增强版。
+# 与旧版 FACT_RETRIEVAL_PROMPT 的关键区别是：
+# - 只允许依据 user 消息生成事实；
+# - 明确禁止把 assistant 或 system 消息中的内容归到用户身上；
+# - 少样本示例同时展示 user/assistant，但输出只保留用户信息；
+# - 输出仍保持 {"facts": [...]} 的简单结构。
+# 该提示词同样使用 f-string，在模块加载时插入当天日期。
 USER_MEMORY_EXTRACTION_PROMPT = f"""You are a Personal Information Organizer, specialized in accurately storing facts, user memories, and preferences. 
 Your primary role is to extract relevant pieces of information from conversations and organize them into distinct, manageable facts. 
 This allows for easy retrieval and personalization in future interactions. Below are the types of information you need to focus on and the detailed instructions on how to handle the input data.
@@ -121,6 +155,11 @@ Following is a conversation between the user and the assistant. You have to extr
 """
 
 # AGENT_MEMORY_EXTRACTION_PROMPT - Enhanced version based on platform implementation
+# 助手记忆抽取提示词的增强版。
+# 它与上一段形成镜像：上一段只抽取用户信息，这一段只抽取助手信息。
+# 主要用于记录助手在对话中表现出的偏好、能力、做事方式、知识领域等。
+# 提示词反复强调不得混入 user 或 system 消息，以降低归因错误。
+# 输出格式仍为 {"facts": [...]}，便于复用旧版解析流程。
 AGENT_MEMORY_EXTRACTION_PROMPT = f"""You are an Assistant Information Organizer, specialized in accurately storing facts, preferences, and characteristics about the AI assistant from conversations. 
 Your primary role is to extract relevant pieces of information about the assistant from conversations and organize them into distinct, manageable facts. 
 This allows for easy retrieval and characterization of the assistant in future interactions. Below are the types of information you need to focus on and the detailed instructions on how to handle the input data.
@@ -173,6 +212,15 @@ Remember the following:
 Following is a conversation between the user and the assistant. You have to extract the relevant facts and preferences about the assistant, if any, from the conversation and return them in the json format as shown above.
 """
 
+# 默认记忆更新提示词。
+# 这一阶段不再负责“发现事实”，而是把新事实与已有记忆做对比，
+# 决定每条记忆应执行 ADD、UPDATE、DELETE 或 NONE。
+# 字符串内部通过四组规则和示例说明：
+# - ADD：新增尚未存在的信息，并生成新 ID；
+# - UPDATE：在语义变化或新事实更丰富时复用原 ID 更新；
+# - DELETE：当新事实与旧记忆矛盾或明确要求删除时移除；
+# - NONE：内容已存在或无须变化时保持原样。
+# 后面的 get_update_memory_messages() 会把当前记忆和新事实嵌入该模板。
 DEFAULT_UPDATE_MEMORY_PROMPT = """You are a smart memory manager which controls the memory of a system.
 You can perform four operations: (1) add into the memory, (2) update the memory, (3) delete from the memory, and (4) no change.
 
@@ -323,6 +371,11 @@ Please note to return the IDs in the output from the input IDs only and do not g
         }
 """
 
+# 过程记忆（procedural memory）总结用的系统提示词。
+# 目标不是抽取用户画像，而是完整保存智能体过去 N 步的执行历史，
+# 让后续智能体能够无歧义地继续未完成任务。
+# 它要求每一步包含动作、未经改写的结果、关键发现、导航历史、错误和当前上下文，
+# 并特别强调动作结果必须逐字保留、按时间顺序记录。
 PROCEDURAL_MEMORY_SYSTEM_PROMPT = """
 You are a memory summarization system that records and preserves the complete interaction history between a human and an AI agent. You are provided with the agent’s execution history over the past N steps. Your task is to produce a comprehensive summary of the agent's output history that contains every detail necessary for the agent to continue the task without ambiguity. **Every output produced by the agent must be recorded verbatim as part of the summary.**
 
@@ -403,13 +456,25 @@ You are a memory summarization system that records and preserves the complete in
 """
 
 
+# 根据“旧记忆 + 新抽取事实”构造完整的记忆更新提示词。
+# retrieved_old_memory_dict：当前已有记忆；可以是字典，也可以是调用方准备好的可打印对象。
+# response_content：上一阶段抽取出的新事实文本。
+# custom_update_memory_prompt：可选的自定义更新规则；不传时使用模块默认规则。
 def get_update_memory_messages(retrieved_old_memory_dict, response_content, custom_update_memory_prompt=None):
+    # 调用方未提供自定义规则时，回退到模块级默认更新提示词。
     if custom_update_memory_prompt is None:
+        # 声明这里引用的是模块级变量，而不是创建同名局部变量。
+        # 本函数只读取该变量；从 Python 语义上看 global 并非必需，但保留原代码不变。
         global DEFAULT_UPDATE_MEMORY_PROMPT
+        # 将默认规则赋给局部参数，后面只需统一使用 custom_update_memory_prompt。
         custom_update_memory_prompt = DEFAULT_UPDATE_MEMORY_PROMPT
 
 
+    # 根据旧记忆是否为空，构造不同的“当前记忆”上下文。
+    # 这样模型能够区分“在已有记忆上更新”和“从空记忆开始新增”两种场景。
     if retrieved_old_memory_dict:
+        # 旧记忆非空时，把其字符串表示嵌入 Markdown 代码块，
+        # 使模型清楚识别待比较的现有数据边界。
         current_memory_part = f"""
     Below is the current content of my memory which I have collected till now. You have to update it in the following format only:
 
@@ -419,11 +484,14 @@ def get_update_memory_messages(retrieved_old_memory_dict, response_content, cust
 
     """
     else:
+        # 旧记忆为空时，不插入伪造结构，直接明确告知模型当前 memory 为空。
         current_memory_part = """
     Current memory is empty.
 
     """
 
+    # 按“更新规则 → 当前记忆 → 新事实 → 输出结构 → 补充约束”的顺序拼接最终提示词。
+    # f-string 中 JSON 示例使用双大括号 {{ }}，是为了在结果中保留字面量花括号。
     return f"""{custom_update_memory_prompt}
 
     {current_memory_part}
@@ -465,6 +533,15 @@ def get_update_memory_messages(retrieved_old_memory_dict, response_content, cust
 # Ported from platform/backend/shared/core/config/prompts.py
 # ---------------------------------------------------------------------------
 
+# V3 加法式记忆抽取的系统提示词。
+# 与 DEFAULT_UPDATE_MEMORY_PROMPT 的“增删改查”模式不同，本提示词只产生 ADD 结果：
+# - 从新消息中尽可能完整地抽取可记忆信息；
+# - 同时允许从 user 和 assistant 消息抽取，但必须正确标注 attributed_to；
+# - 使用 Existing Memories 只做去重和关联，不能把旧记忆重新当作新事实抽取；
+# - 新记忆可通过 linked_memory_ids 指向相关旧记忆，从而形成记忆关系图；
+# - 对相对时间必须使用 Observation Date 解析，而不是错误地使用 Current Date；
+# - 最终只输出可由 json.loads() 解析的 JSON。
+# 字符串较长，是核心行为规范；为避免改变模型输入，内部文本不插入额外中文注释。
 ADDITIVE_EXTRACTION_PROMPT = """
 
 # ROLE
@@ -944,6 +1021,9 @@ Return ONLY valid JSON parsable by json.loads(). No text, reasoning, explanation
 """
 
 
+# 面向“AI 智能体作为主要实体”时追加的上下文后缀。
+# 它不会单独完成抽取，而是与 ADDITIVE_EXTRACTION_PROMPT 组合使用，
+# 把记忆表述切换为智能体视角，同时仍保留原始信息来源的 attributed_to。
 AGENT_CONTEXT_SUFFIX = """
 
 ## Entity Context
@@ -962,67 +1042,113 @@ The attributed_to field should still reflect the original source: "user" for fac
 # Ported from platform/backend/shared/core/utils/prompt_builder.py
 # ---------------------------------------------------------------------------
 
+# 历史消息单条内容的默认截断上限。
+# 该值只作用于 last_k_messages 的展示，避免历史上下文无限膨胀；
+# 新消息、已有记忆等其他输入有各自的格式化路径，不受此常量直接限制。
 PAST_MESSAGE_TRUNCATION_LIMIT = 300
 
 
+# 将一段历史消息限制在指定字符数内。
+# 该函数只做字符级截断，不理解 token，也不按单词边界切分。
 def _truncate_content(text, limit=PAST_MESSAGE_TRUNCATION_LIMIT):
     """Truncate text to limit characters, appending '...' when shortened."""
+    # 内容长度未超过上限时，原样返回，避免无意义地增加省略号。
     if len(text) <= limit:
         return text
+    # 超过上限时保留前 limit 个字符，并追加省略号表示内容被裁剪。
     return text[:limit] + "..."
 
 
+# 统一处理 summary 的两种允许输入：纯字符串或包含 summary 键的字典。
 def _format_summary(summary):
     """Extract summary text from a string or dict with a 'summary' key."""
+    # 如果上游传入结构化字典，只提取约定的 summary 字段。
     if isinstance(summary, dict):
+        # 键不存在时返回空字符串，避免把 None 继续拼入最终提示词。
         return summary.get("summary", "")
+    # 非字典输入直接作为摘要使用；None、空字符串等假值统一归一化为空字符串。
     return summary or ""
 
 
+# 把最近若干条历史消息整理成逐行的“role: content”文本。
+# 此函数用于 Last k Messages，而不是 New Messages；两者格式化策略不同。
 def _format_conversation_history(messages):
     """Format message dicts into 'role: content' lines with truncation."""
+    # 没有历史消息时直接返回空字符串，避免后续循环和类型问题。
     if not messages:
         return ""
+    # 使用字符串累加保存格式化结果，消息顺序与输入列表保持一致。
     result = ""
+    # 依次处理每条消息，保证上下文仍按原始时间顺序排列。
     for msg in messages:
+        # role 缺失时使用空字符串；后面会跳过角色或内容不完整的记录。
         role = msg.get("role", "")
+        # 兼容两种上游字段名：优先使用 message，若为空再读取 content。
         content = msg.get("message") or msg.get("content", "")
+        # 只有角色和正文都有效时才写入，防止产生形如“: ”的无效行。
         if role and content:
+            # 每条正文先按默认上限截断，再组成一行并追加换行符。
             result += f"{role}: {_truncate_content(content)}\n"
+    # 返回完整的多行历史文本，供主构建函数嵌入提示词章节。
     return result
 
 
+# 将记忆对象列表序列化为 JSON 文本，以便安全嵌入提示词。
 def _serialize_memories(memories):
     """JSON-serialize a list of memory objects, defaulting to '[]'."""
+    # memories 为空时统一使用空列表；ensure_ascii=False 保留中文等非 ASCII 字符，
+    # 避免它们变成可读性较差的 \uXXXX 转义序列。
     return json.dumps(memories or [], ensure_ascii=False)
 
 
+# 统一格式化本轮待抽取的新消息。
+# 与历史消息不同，新消息通常保留完整结构和完整内容，不做截断。
 def _format_new_messages(new_messages):
     """Pass through if already a string, otherwise JSON-serialize."""
+    # 调用方若已构造好字符串，就直接透传，避免重复 JSON 编码和额外引号。
     if isinstance(new_messages, str):
         return new_messages
+    # 列表或字典等结构化输入转为 JSON；空值统一变成 []。
     return json.dumps(new_messages or [], ensure_ascii=False)
 
 
+# 解析“当前日期”和“观察日期”这两个不同的时间锚点。
+# current_date 表示系统今天；observation_date 表示对话实际发生的日期。
 def _resolve_dates(current_date=None, observation_date=None):
     """Resolve current and observation dates, defaulting to today."""
+    # 未显式传入当前日期时，使用 UTC 的今天，并转为 YYYY-MM-DD 字符串。
     if current_date is None:
         current_date = datetime.now(timezone.utc).date().isoformat()
+    # 未传观察日期时，默认认为被处理的对话发生在当前日期。
     if observation_date is None:
         observation_date = current_date
+    # 同时返回两个日期；调用方会分别写入提示词的不同章节。
     return current_date, observation_date
 
 
+# 构建与 ADDITIVE_EXTRACTION_PROMPT 配套的“用户侧提示词”。
+# 系统提示词负责定义抽取规则；本函数负责把本次调用的具体数据按固定章节注入。
 def generate_additive_extraction_prompt(
+    # 既有用户画像摘要；允许字符串或带 summary 键的字典。
     summary=None,
+    # 本会话最近已经抽取出的记忆，用于防止短时间内重复抽取。
     recently_extracted_memories=None,
+    # 系统中长期保存的相关记忆，用于去重和建立 linked_memory_ids。
     existing_memories=None,
+    # 当前轮次真正需要进行抽取的新消息。
     new_messages=None,
+    # 星号之后的参数必须使用关键字传递，降低位置参数错位风险。
     *,
+    # 新消息之前的最近若干条对话，用来解析代词和补足上下文。
     last_k_messages=None,
+    # 系统当前日期；不传时由 _resolve_dates() 使用 UTC 日期补齐。
     current_date=None,
+    # 这里虽然名为 timestamp，实际被当作 observation_date 传递，
+    # 即用于解释“昨天、上周、下个月”等相对时间的对话观察日期。
     timestamp=None,
+    # 用户或业务方提供的额外抽取规则，优先补充在标准输入章节之后。
     custom_instructions=None,
+    # 是否要求模型使用输入消息相同的语言和文字系统输出记忆。
     use_input_language=False,
 ):
     """Build the user prompt for additive (ADD-only) extraction with linking.
@@ -1030,21 +1156,36 @@ def generate_additive_extraction_prompt(
     Pairs with ADDITIVE_EXTRACTION_PROMPT system prompt.
     The LLM will produce only ADD operations, with optional linked_memory_ids.
     """
+    # 同时得到当前日期和观察日期；第二个实参使用 timestamp 是现有接口约定。
     current_date, observation_date = _resolve_dates(current_date, timestamp)
 
+    # 使用列表逐段收集提示词章节，最后统一 join；
+    # 这种方式比在循环中反复拼接一个大字符串更清晰，也便于条件式加入章节。
     sections = []
+    # 第一段写入长期摘要，统一处理字符串和字典两种输入形式。
     sections.append(f"## Summary\n{_format_summary(summary)}")
+    # 第二段写入最近历史消息，并对每条历史正文执行字符级截断。
     sections.append(f"## Last k Messages\n{_format_conversation_history(last_k_messages)}")
+    # 第三段写入本会话刚抽取过的记忆，供模型做近距离去重。
     sections.append(f"## Recently Extracted Memories\n{_serialize_memories(recently_extracted_memories)}")
+    # 第四段写入长期已有记忆，供模型判断语义重复和建立关联。
     sections.append(f"## Existing Memories\n{_serialize_memories(existing_memories)}")
+    # 第五段写入本轮新消息；若传入结构化对象，则序列化为 JSON。
     sections.append(f"## New Messages\n{_format_new_messages(new_messages)}")
+    # Observation Date 是解析新消息相对时间表达的唯一锚点。
     sections.append(f"## Observation Date\n{observation_date}")
+    # Current Date 仅表示系统当前日期，不能替代 Observation Date 解释历史对话。
     sections.append(f"## Current Date\n{current_date}")
 
+    # 只有确实提供了自定义规则时才增加章节，避免生成空标题干扰模型。
     if custom_instructions:
+        # 自定义规则放在标准上下文之后，使模型同时看到基础输入和附加要求。
         sections.append(f"## Custom Instructions\n{custom_instructions}")
 
+    # 开启语言跟随选项时，追加一整组跨语言输出约束。
     if use_input_language:
+        # 相邻字符串字面量会被 Python 自动拼接成一个字符串，
+        # 因而无需显式使用 +；每段末尾的 \n 控制最终提示词中的换行。
         sections.append(
             "## Language Requirement\n"
             "CRITICAL: Respond in the SAME LANGUAGE and SCRIPT as the input messages.\n"
@@ -1058,5 +1199,7 @@ def generate_additive_extraction_prompt(
             "8. For CJK languages: maintain appropriate formality level from the source text."
         )
 
+    # 用固定输出标记结束输入区，提醒模型从这里开始生成答案。
     sections.append("# Output:")
+    # 各章节之间插入两个换行，形成清晰的 Markdown 分段，并返回完整提示词。
     return "\n\n".join(sections)
